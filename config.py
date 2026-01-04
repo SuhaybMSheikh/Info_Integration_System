@@ -8,7 +8,7 @@ ACADEMIC_SESSION = "2025-2026"
 DEPARTMENT_CODE = "APP"
 SUBJECT_AREA_DEFAULT = "AIS"
 
-# Known time patterns (minutes → UniTime code)
+# Known time patterns (minutes -> UniTime code)
 TIME_PATTERNS = {
     90: "90"
 }
