@@ -1,16 +1,15 @@
 UNITIME_BASE_URL = "https://unitime3.apu.edu.my/UniTime"
 DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/dataExchange"
 
-USERNAME = "admin"
-PASSWORD = "admin"
+USERNAME = "unitime_integration"
+PASSWORD = "password"
 
-ACADEMIC_SESSION = "2025-2026"
-DEPARTMENT_CODE = "APP"
+ACADEMIC_SESSION = "2025 2025"
 
-# Time patterns must already exist in UniTime
-TIME_PATTERNS = {
-    90: "90"
-}
+# Operational hours (used later by time pattern logic)
+DAY_START = "08:30"
+DAY_END = "17:00"
+TIME_STEP_MINUTES = 15
 
 # Control behavior
 ALLOW_DATE_PATTERN_CREATION = True
