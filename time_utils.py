@@ -1,5 +1,3 @@
-# time_utils.py
-
 import re
 from math import ceil
 
