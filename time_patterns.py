@@ -10,3 +10,10 @@ def time_pattern_name(duration_minutes: int) -> str:
 
     label = " ".join(parts)
     return f"Updated {label} break 15"
+
+def generate_start_times(duration_minutes: int) -> list[int]:
+    start = 830
+    end = 1700
+    step = 15
+
+    return list(range(start, end + 1, step))
