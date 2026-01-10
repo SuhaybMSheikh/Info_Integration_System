@@ -1,11 +1,12 @@
-# These MUST already exist in UniTime
-# Key = duration in minutes
-# Value = EXACT UniTime time pattern name
+def time_pattern_name(duration_minutes: int) -> str:
+    hours = duration_minutes // 60
+    minutes = duration_minutes % 60
 
-TIME_PATTERN_MAP = {
-    60:  "Updated 1 H break 15",
-    90:  "Updated 1.5 H break 15",
-    120: "Updated 2 H break 15",
-    180: "Updated 3 H break 15",
-    210: "Updated 3 H 30 M break 15",
-}
+    parts = []
+    if hours:
+        parts.append(f"{hours} H")
+    if minutes:
+        parts.append(f"{minutes} M")
+
+    label = " ".join(parts)
+    return f"Updated {label} break 15"
