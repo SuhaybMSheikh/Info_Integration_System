@@ -1,23 +1,25 @@
 from excel_loader import load_excel
-from json_normalizer import normalize_rows
-from json_validators import validate_json
-from json_to_xml_mapper import json_to_xml_payloads
+from time_utils import normalize_duration
+from time_patterns import TIME_PATTERN_MAP
+from xml_builders import build_instructor_xml
 from unitime_client import post_xml
 
 def main():
-    df = load_excel("input.xlsx")
-    rows = df.to_dict(orient="records")
+    records = load_excel("input.xlsx")
 
-    canonical_json = normalize_rows(rows)
-    validate_json(canonical_json)
+    for r in records:
+        duration_minutes = normalize_duration(r["class_duration_raw"])
 
-    payloads = json_to_xml_payloads(canonical_json)
+        if duration_minutes not in TIME_PATTERN_MAP:
+            raise RuntimeError(
+                f"No time pattern for rounded duration {duration_minutes} minutes"
+            )
 
-    post_xml(payloads["instructors"])
-    post_xml(payloads["courses"])
-    post_xml(payloads["classes"])
+        r["duration_minutes"] = duration_minutes
+        r["time_pattern_name"] = TIME_PATTERN_MAP[duration_minutes]
 
-    print("Import completed successfully.")
+    xml_payload = build_instructor_xml(records)
+    post_xml(xml_payload)
 
 if __name__ == "__main__":
     main()

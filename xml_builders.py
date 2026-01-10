@@ -26,20 +26,11 @@ def build_course_xml(courses: set) -> str:
     xml.append("</courseOfferings>")
     return "\n".join(xml)
 
-def build_class_xml(classes: list) -> str:
-    xml = ["<classes>"]
-
-    for cls in classes:
-        xml.append(f"""
-        <class externalId="{cls['external_id']}">
-            <course>{cls['course_nbr']}</course>
-            <expectedCapacity>{cls['capacity']}</expectedCapacity>
-            <maxExpectedCapacity>{cls['capacity']}</maxExpectedCapacity>
-            <instructor>{cls['instructor']}</instructor>
-            <timePattern>{cls['time_pattern']}</timePattern>
-            <datePattern>{cls['date_pattern']}</datePattern>
-        </class>
-        """)
-
-    xml.append("</classes>")
-    return "\n".join(xml)
+def build_class_xml(record):
+    return f"""
+    <class>
+        <externalId>{record['class_code']}</externalId>
+        <limit>{record['total_students']}</limit>
+        <timePattern>{record['time_pattern_name']}</timePattern>
+    </class>
+    """
