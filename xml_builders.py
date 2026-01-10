@@ -77,7 +77,7 @@ def build_class_xml(record: dict) -> str:
         </class>
     """
 
-def build_instructional_offering_xml(subject_code: str, faculty: str, classes_xml: str) -> str:
+def _build_instructional_offering_xml(subject_code: str, faculty: str, classes_xml: str) -> str:
     """
     One instructional offering per subject per faculty.
     """
