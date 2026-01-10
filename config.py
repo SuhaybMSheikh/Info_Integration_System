@@ -1,4 +1,4 @@
-UNITIME_BASE_URL = "http://localhost:8080/UniTime"
+UNITIME_BASE_URL = "https://unitime3.apu.edu.my/UniTime"
 DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/dataExchange"
 
 USERNAME = "admin"
@@ -6,11 +6,12 @@ PASSWORD = "admin"
 
 ACADEMIC_SESSION = "2025-2026"
 DEPARTMENT_CODE = "APP"
-SUBJECT_AREA_DEFAULT = "AIS"
 
-# Known time patterns (minutes -> UniTime code)
+# Time patterns must already exist in UniTime
 TIME_PATTERNS = {
     90: "90"
 }
 
-LOG_DIR = "logs"
+# Control behavior
+ALLOW_DATE_PATTERN_CREATION = True
+FAIL_ON_MISSING_CURRICULUM = True
