@@ -34,3 +34,19 @@ def build_class_xml(record):
         <timePattern>{record['time_pattern_name']}</timePattern>
     </class>
     """
+
+def build_time_pattern_xml(duration_minutes: int, start_times: list[str]) -> str:
+    times_xml = "".join(
+        f"<time start=\"{t}\" />" for t in start_times
+    )
+
+    return f"""
+    <timePattern>
+        <name>{duration_minutes}</name>
+        <minutes>{duration_minutes}</minutes>
+        <breakTime>15</breakTime>
+        <times>
+            {times_xml}
+        </times>
+    </timePattern>
+    """
