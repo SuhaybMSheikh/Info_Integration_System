@@ -1,4 +1,4 @@
-def resolve_time_pattern(duration_minutes: int, available_patterns: dict) -> int:
+def resolve_time_pattern(name: str, existing_patterns: set[str]) -> bool:
     """
     available_patterns example:
     {
@@ -8,9 +8,4 @@ def resolve_time_pattern(duration_minutes: int, available_patterns: dict) -> int
         180: pattern_id
     }
     """
-    if duration_minutes not in available_patterns:
-        raise RuntimeError(
-            f"No UniTime time pattern for duration {duration_minutes} minutes"
-        )
-
-    return available_patterns[duration_minutes]
+    return name in existing_patterns
