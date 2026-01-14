@@ -1,5 +1,3 @@
-from config import TIME_PATTERNS
-
 def validate_json(data: dict):
     if "modules" not in data:
         raise ValueError("No modules found")
@@ -14,5 +12,5 @@ def validate_json(data: dict):
             if cls["expectedStudents"] <= 0:
                 raise ValueError("Invalid expectedStudents")
 
-            if cls["durationMinutes"] not in TIME_PATTERNS:
-                raise ValueError("Unknown time pattern")
+            if cls["durationMinutes"] <= 0:
+                raise ValueError("Invalid durationMinutes")
