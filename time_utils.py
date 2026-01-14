@@ -1,5 +1,3 @@
-# time_utils.py
-
 import re
 from math import ceil
 
@@ -7,9 +5,7 @@ ROUND_TO_MINUTES = 15
 
 def parse_duration_to_minutes(text: str) -> int:
     text = text.upper()
-
-    hours = 0
-    minutes = 0
+    hours = minutes = 0
 
     h = re.search(r"(\d+)\s*H", text)
     m = re.search(r"(\d+)\s*M", text)

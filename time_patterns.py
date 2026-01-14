@@ -8,12 +8,7 @@ def time_pattern_name(duration_minutes: int) -> str:
     if minutes:
         parts.append(f"{minutes} M")
 
-    label = " ".join(parts)
-    return f"Updated {label} break 15"
+    return f"Auto {' '.join(parts)}"
 
-def generate_start_times(duration_minutes: int) -> list[int]:
-    start = 830
-    end = 1700
-    step = 15
-
+def generate_start_times(start=830, end=1700, step=15) -> list[int]:
     return list(range(start, end + 1, step))
