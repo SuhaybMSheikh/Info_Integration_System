@@ -1,20 +1,7 @@
-import requests
-from config import UNITIME_BASE_URL, USERNAME, PASSWORD
+from config import EXPECTED_ACADEMIC_SESSION
 
-def check_curriculum_exists(code: str) -> bool:
-    url = f"{UNITIME_BASE_URL}/api/curricula"
-    r = requests.get(url, auth=(USERNAME, PASSWORD))
-    return code in r.text
-
-def validate_faculties_exist(client, records):
-    faculties_in_data = {r["faculty"] for r in records}
-
-    existing = client.get_departments()  # returns { "APP": id, "ATA": id }
-
-    missing = faculties_in_data - existing.keys()
-    if missing:
-        raise RuntimeError(
-            f"Missing departments in UniTime: {', '.join(missing)}"
-        )
-
-    return existing
+def validate_academic_session(sessions):
+    for s in sessions:
+        if s.get("academicYear") == EXPECTED_ACADEMIC_SESSION and s.get("active"):
+            return s["id"]
+    raise RuntimeError("Expected academic session not active")

@@ -1,21 +1,20 @@
 import requests
-from config import DATA_EXCHANGE_ENDPOINT, USERNAME, PASSWORD
+from config import USERNAME, PASSWORD, DATA_EXCHANGE_ENDPOINT, UNITIME_BASE_URL
 
-def post_xml(xml_payload: str):
-    headers = {"Content-Type": "application/xml"}
-
-    response = requests.post(
+def post_xml(xml: str):
+    r = requests.post(
         DATA_EXCHANGE_ENDPOINT,
-        data=xml_payload.encode("utf-8"),
-        headers=headers,
         auth=(USERNAME, PASSWORD),
+        headers={"Content-Type": "application/xml"},
+        data=xml.encode("utf-8"),
         timeout=30
     )
+    if r.status_code != 200 or "<status>OK</status>" not in r.text:
+        raise RuntimeError(r.text)
 
-    if response.status_code != 200:
-        raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
 
-    if "<status>OK</status>" not in response.text:
-        raise RuntimeError(f"UniTime rejected payload:\n{response.text}")
-
-    return response.text
+def get_sessions():
+    return requests.get(
+        f"{UNITIME_BASE_URL}/api/sessions",
+        auth=(USERNAME, PASSWORD)
+    ).json()

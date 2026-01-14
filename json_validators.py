@@ -1,16 +1,9 @@
-def validate_json(data: dict):
-    if "modules" not in data:
-        raise ValueError("No modules found")
+def validate_records(records):
+    seen = set()
+    for r in records:
+        if r["class_code"] in seen:
+            raise ValueError("Duplicate class code")
+        seen.add(r["class_code"])
 
-    for module in data["modules"]:
-        if "courseCode" not in module:
-            raise ValueError("Module missing courseCode")
-
-        for io in module["instructionalOfferings"]:
-            cls = io["class"]
-
-            if cls["expectedStudents"] <= 0:
-                raise ValueError("Invalid expectedStudents")
-
-            if cls["durationMinutes"] <= 0:
-                raise ValueError("Invalid durationMinutes")
+        if r["total_students"] <= 0:
+            raise ValueError("Invalid student count")
