@@ -7,7 +7,7 @@ def load_excel(path: str) -> list[dict]:
     records = []
     for _, row in df.iterrows():
         records.append({
-            "week_begins": row["Week Begins"],
+            "week_begins": row["Week Beginning"],
             "intakes_raw": row["Intakes"],
             "subject_raw": row["Subjects"],
             "lecturer_name": row["Lecturer Name"],

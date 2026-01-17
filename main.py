@@ -9,7 +9,7 @@ from unitime_checks import validate_academic_session
 from config import DEFAULT_BREAK_MINUTES, DRY_RUN
 
 def main():
-    records = load_excel("input.xlsx")
+    records = load_excel("allocated-module-list.xlsx")
     records = normalize_records(records)
     validate_records(records)
 
