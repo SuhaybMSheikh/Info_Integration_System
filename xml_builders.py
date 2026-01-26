@@ -1,4 +1,5 @@
 from datetime import datetime
+from config import EXPECTED_ACADEMIC_SESSION
 
 def xml_escape(s: str) -> str:
     if s is None:
@@ -80,9 +81,12 @@ def build_data_exchange_xml(records, time_patterns):
 </instructionalOffering>
 """
 
+    session_xml = build_session_xml()
+
     #  Final XML
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <dataExchange>
+{session_xml}
 
   <timePatterns>
     {''.join(time_pattern_xml_blocks)}
@@ -97,4 +101,13 @@ def build_data_exchange_xml(records, time_patterns):
   </instructionalOfferings>
 
 </dataExchange>
+"""
+
+def build_session_xml():
+    year, term = EXPECTED_ACADEMIC_SESSION.split()
+    return f"""
+  <session>
+    <academicYear>{year}</academicYear>
+    <term>{term}</term>
+  </session>
 """
