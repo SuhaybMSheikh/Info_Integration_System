@@ -1,8 +1,11 @@
+import os
+from dotenv import load_dotenv
+
 UNITIME_BASE_URL = "https://unitime3.apu.edu.my/UniTime"
 DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/dataExchange"
 
-USERNAME = "TP078889@mail.apu.edu.my"
-PASSWORD = "Tp078889@2410"
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
 
 EXPECTED_ACADEMIC_SESSION = "2026 2026"
 
