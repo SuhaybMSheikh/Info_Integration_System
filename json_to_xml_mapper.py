@@ -1,4 +1,4 @@
-from xml_builders import build_instructional_offerings_xml
+from xml_builders import build_data_exchange_xml
 
-def records_to_xml(records):
-    return build_instructional_offerings_xml(records)
+def records_to_xml(records, time_patterns):
+    return build_data_exchange_xml(records, time_patterns)

@@ -1,8 +1,8 @@
 UNITIME_BASE_URL = "https://unitime3.apu.edu.my/UniTime"
 DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/dataExchange"
 
-USERNAME = "unitime_integration"
-PASSWORD = "password"
+USERNAME = "TP078889@mail.apu.edu.my"
+PASSWORD = "Tp078889@2410"
 
 EXPECTED_ACADEMIC_SESSION = "2026 2026"
 

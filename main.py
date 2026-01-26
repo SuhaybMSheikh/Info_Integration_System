@@ -13,7 +13,7 @@ def main():
     records = normalize_records(records)
     validate_records(records)
 
-    validate_academic_session(get_sessions())
+    # validate_academic_session(get_sessions())
 
     time_patterns = {}
     for r in records:
@@ -23,13 +23,16 @@ def main():
         time_patterns[mins] = r["time_pattern_name"]
 
     xml = ""
+
+    time_pattern_starts = {}
     for mins, name in time_patterns.items():
-        xml += build_time_pattern_xml(
-            name, mins, DEFAULT_BREAK_MINUTES, generate_start_times()
-        )
+        time_pattern_starts[name] = generate_start_times(mins)
+
+    for name, starts in time_pattern_starts.items():
+        xml += build_time_pattern_xml(name, starts)
 
     from json_to_xml_mapper import records_to_xml
-    xml += records_to_xml(records)
+    xml = records_to_xml(records, time_pattern_starts)
 
     if DRY_RUN:
         print(xml)

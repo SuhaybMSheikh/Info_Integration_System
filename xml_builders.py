@@ -1,6 +1,8 @@
 from datetime import datetime
 
 def xml_escape(s: str) -> str:
+    if s is None:
+        return ""
     return (
         s.replace("&", "&amp;")
          .replace("<", "&lt;")
@@ -9,55 +11,62 @@ def xml_escape(s: str) -> str:
          .replace("'", "&apos;")
     )
 
+
 def format_date(d: str) -> str:
     return datetime.strptime(d, "%d/%m/%Y").strftime("%Y-%m-%d")
 
+# Time Patterns
+def build_time_pattern_xml(name, start_times_hhmm):
+    times_xml = "".join(
+        f'<time start="{t}"/>' for t in start_times_hhmm
+    )
 
-def build_time_pattern_xml(name, minutes, break_time, start_times):
-    times = "\n".join(f'<time start="{t}"/>' for t in start_times)
     return f"""
 <timePattern>
   <name>{xml_escape(name)}</name>
-  <minutes>{minutes}</minutes>
-  <breakTime>{break_time}</breakTime>
-  <times>{times}</times>
+  <times>
+    {times_xml}
+  </times>
 </timePattern>
 """
 
+# Main XML Builder
+def build_data_exchange_xml(records, time_patterns):
+    instructors = {}
+    offerings = {}
+    time_pattern_xml_blocks = []
 
-def build_instructor_xml(code, name):
-    return f"""
+    # Time Patterns
+    for tp_name, starts in time_patterns.items():
+        time_pattern_xml_blocks.append(
+            build_time_pattern_xml(tp_name, starts)
+        )
+
+    # Records
+    for r in records:
+        # Instructors
+        instructors[r["lecturer_code"]] = f"""
 <instructor>
-  <externalId>{xml_escape(code)}</externalId>
-  <firstName>{xml_escape(name)}</firstName>
-  <lastName>{xml_escape(name)}</lastName>
+  <externalId>{xml_escape(r["lecturer_code"])}</externalId>
+  <name>{xml_escape(r["lecturer_name"])}</name>
 </instructor>
 """
 
-
-def build_class_xml(r):
-    return f"""
+        # Classes
+        class_xml = f"""
 <class>
-  <externalId>{xml_escape(r['class_code'])}</externalId>
-  <limit>{r['total_students']}</limit>
-  <timePattern>{xml_escape(r['time_pattern_name'])}</timePattern>
-  <instructor>{xml_escape(r['lecturer_code'])}</instructor>
+  <externalId>{xml_escape(r["class_code"])}</externalId>
+  <limit>{r["total_students"]}</limit>
+  <weeks>{r["duration_weeks"]}</weeks>
+  <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
 </class>
 """
 
-
-def build_instructional_offerings_xml(records):
-    instructors = {}
-    offerings = {}
-
-    for r in records:
-        instructors[r["lecturer_code"]] = r["lecturer_name"]
         key = (r["subject_area"], r["course_number"])
-        offerings.setdefault(key, []).append(build_class_xml(r))
+        offerings.setdefault(key, []).append(class_xml)
 
-    instructors_xml = "".join(
-        build_instructor_xml(c, n) for c, n in instructors.items()
-    )
+    #  Assemble XML
+    instructors_xml = "".join(instructors.values())
 
     offerings_xml = ""
     for (sa, cn), classes in offerings.items():
@@ -65,13 +74,27 @@ def build_instructional_offerings_xml(records):
 <instructionalOffering>
   <subject>{xml_escape(sa)}</subject>
   <courseNumber>{xml_escape(cn)}</courseNumber>
-  <classes>{''.join(classes)}</classes>
+  <classes>
+    {''.join(classes)}
+  </classes>
 </instructionalOffering>
 """
 
-    return f"""<?xml version="1.0"?>
+    #  Final XML
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <dataExchange>
-  <instructors>{instructors_xml}</instructors>
-  <instructionalOfferings>{offerings_xml}</instructionalOfferings>
+
+  <timePatterns>
+    {''.join(time_pattern_xml_blocks)}
+  </timePatterns>
+
+  <instructors>
+    {instructors_xml}
+  </instructors>
+
+  <instructionalOfferings>
+    {offerings_xml}
+  </instructionalOfferings>
+
 </dataExchange>
 """
