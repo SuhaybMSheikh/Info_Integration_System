@@ -120,6 +120,9 @@ def build_curricula_xml(records):
     curricula = {}
 
     for r in records:
+        if "intakes" not in r or not r["intakes"]:
+            continue
+
         for intake in r["intakes"]:
             key = intake["code"]
 
