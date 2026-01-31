@@ -83,11 +83,14 @@ def build_data_exchange_xml(records, time_patterns):
 """
 
     session_xml = build_session_xml()
+    curricula_xml = build_curricula_xml(records)
 
     #  Final XML
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <dataExchange>
 {session_xml}
+
+{curricula_xml}
 
   <timePatterns>
     {''.join(time_pattern_xml_blocks)}
