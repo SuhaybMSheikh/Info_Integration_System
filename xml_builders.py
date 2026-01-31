@@ -112,3 +112,46 @@ def build_session_xml():
     <term>{term}</term>
   </session>
 """
+
+def build_curricula_xml(records):
+    curricula = {}
+
+    for r in records:
+        for intake in r["intakes"]:
+            key = intake["code"]
+
+            curricula.setdefault(key, []).append({
+                "subject": r["subject_area"],
+                "course": r["course_number"],
+                "students": intake["students"]
+            })
+
+    xml_blocks = []
+
+    for intake_code, projections in curricula.items():
+        projections_xml = ""
+
+        for p in projections:
+            projections_xml += f"""
+        <courseProjection>
+          <subject>{xml_escape(p["subject"])}</subject>
+          <courseNumber>{xml_escape(p["course"])}</courseNumber>
+          <students>{p["students"]}</students>
+        </courseProjection>
+"""
+
+        xml_blocks.append(f"""
+  <curriculum>
+    <abbreviation>{xml_escape(intake_code)}</abbreviation>
+    <name>{xml_escape(intake_code)}</name>
+    <courseProjections>
+      {projections_xml}
+    </courseProjections>
+  </curriculum>
+""")
+
+    return f"""
+<curricula>
+  {''.join(xml_blocks)}
+</curricula>
+"""
