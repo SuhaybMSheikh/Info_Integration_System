@@ -8,6 +8,7 @@ from unitime_client import post_xml, get_sessions
 from unitime_checks import validate_academic_session
 from config import DEFAULT_BREAK_MINUTES, DRY_RUN
 from pre_import_validators import run_all_pre_import_validations
+from time_pattern_validators import validate_time_pattern_spacing
 
 def main():
     records = load_excel("allocated-module-list.xlsx")
@@ -28,7 +29,15 @@ def main():
 
     time_pattern_starts = {}
     for mins, name in time_patterns.items():
-        time_pattern_starts[name] = generate_start_times(mins)
+        starts = generate_start_times(mins)
+
+        validate_time_pattern_spacing(
+            duration_minutes=mins,
+            break_minutes=DEFAULT_BREAK_MINUTES,
+            start_times=starts
+        )
+
+        time_pattern_starts[name] = starts
 
     for name, starts in time_pattern_starts.items():
         xml += build_time_pattern_xml(name, starts)
