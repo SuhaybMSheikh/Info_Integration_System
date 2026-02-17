@@ -61,6 +61,9 @@ def build_data_exchange_xml(records, time_patterns):
   <limit>{r["total_students"]}</limit>
   <weeks>{r["duration_weeks"]}</weeks>
   <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
+  <instructors>
+    <instructor externalId="{xml_escape(r["lecturer_code"])}"/>
+  </instructors>
 </class>
 """
 
