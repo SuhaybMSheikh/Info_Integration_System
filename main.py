@@ -7,12 +7,14 @@ from xml_builders import build_time_pattern_xml
 from unitime_client import post_xml, get_sessions
 from unitime_checks import validate_academic_session
 from config import DEFAULT_BREAK_MINUTES, DRY_RUN
+from pre_import_validators import run_all_pre_import_validations
 
 def main():
     records = load_excel("allocated-module-list.xlsx")
     records = normalize_records(records)
     validate_records(records)
 
+    run_all_pre_import_validations(records)
     # validate_academic_session(get_sessions())
 
     time_patterns = {}
