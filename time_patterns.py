@@ -1,3 +1,5 @@
+from config import DEFAULT_BREAK_MINUTES
+
 def time_pattern_name(duration_minutes: int) -> str:
     hours = duration_minutes // 60
     minutes = duration_minutes % 60
@@ -20,6 +22,6 @@ def generate_start_times(duration_minutes: int,
         hh = current // 60
         mm = current % 60
         starts.append(f"{hh:02d}{mm:02d}")
-        current += duration_minutes
+        current += duration_minutes + DEFAULT_BREAK_MINUTES
 
     return starts
