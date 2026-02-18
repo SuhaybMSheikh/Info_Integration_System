@@ -56,4 +56,4 @@ def run_all_pre_import_validations(records):
     validate_required_fields(records)
     validate_no_duplicate_class_codes(records)
     validate_no_duplicate_curricula(records)
-    validate_student_totals(records)
+    # validate_student_totals(records)

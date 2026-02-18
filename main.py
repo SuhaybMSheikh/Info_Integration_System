@@ -15,7 +15,6 @@ def main():
     records = normalize_records(records)
     validate_records(records)
 
-    run_all_pre_import_validations(records)
     # validate_academic_session(get_sessions())
 
     time_patterns = {}
@@ -24,6 +23,8 @@ def main():
         r["duration_minutes"] = mins
         r["time_pattern_name"] = time_pattern_name(mins)
         time_patterns[mins] = r["time_pattern_name"]
+
+    run_all_pre_import_validations(records)
 
     xml = ""
 

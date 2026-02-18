@@ -18,13 +18,13 @@ def validate_time_pattern_spacing(duration_minutes, break_minutes, start_times):
         start_min = hhmm_to_minutes(start)
         end_min = start_min + duration_minutes
 
-        # 1️⃣ Check day boundary
+        # Check day boundary
         if end_min > DAY_END:
             raise ValueError(
                 f"Time pattern invalid: class ending at {start} exceeds 18:00"
             )
 
-        # 2️⃣ Check overlap with next slot
+        # Check overlap with next slot
         if i < len(start_times) - 1:
             next_start_min = hhmm_to_minutes(start_times[i + 1])
 

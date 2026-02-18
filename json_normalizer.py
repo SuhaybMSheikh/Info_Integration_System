@@ -5,15 +5,26 @@ def parse_intakes(raw: str):
         return []
 
     intakes = []
+
     parts = raw.split(",")
 
     for p in parts:
-        match = re.search(r"([A-Z0-9]+)\s*\((\d+)\)", p.strip())
-        if match:
-            intakes.append({
-                "code": match.group(1),
-                "students": int(match.group(2))
-            })
+        p = p.strip()
+
+        # Find last (...) group containing digits
+        match = re.search(r"\((\d+)\)\s*$", p)
+        if not match:
+            continue
+
+        students = int(match.group(1))
+
+        # Remove final (number) part to get intake code
+        code = re.sub(r"\(\d+\)\s*$", "", p).strip()
+
+        intakes.append({
+            "code": code,
+            "students": students
+        })
 
     return intakes
 
