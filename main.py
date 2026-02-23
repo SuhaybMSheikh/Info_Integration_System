@@ -11,11 +11,13 @@ from pre_import_validators import run_all_pre_import_validations
 from time_pattern_validators import validate_time_pattern_spacing
 from unitime_time_patterns import get_existing_time_patterns
 from time_pattern_resolver import resolve_time_pattern
+from unitime_courses import get_existing_courses
 
 def main():
     records = load_excel("allocated-module-list.xlsx")
     records = normalize_records(records)
     validate_records(records)
+    existing_courses = get_existing_courses()
     existing_patterns = get_existing_time_patterns()
 
     # validate_academic_session(get_sessions())
@@ -44,17 +46,25 @@ def main():
         time_pattern_starts[name] = starts
 
     for name, starts in time_pattern_starts.items():
-        if not resolve_time_pattern(name, existing_patterns):
-            xml += build_time_pattern_xml(name, starts)
-
         if resolve_time_pattern(name, existing_patterns):
             print(f"Time pattern already exists: {name}")
         else:
             print(f"Creating time pattern: {name}")
             xml += build_time_pattern_xml(name, starts)
 
+    filtered_records = []
+
+    for r in records:
+        key = (r["subject_area"], r["course_number"])
+
+        if key in existing_courses:
+            print(f"Course already exists: {key}")
+        else:
+            print(f"Creating course: {key}")
+            filtered_records.append(r)
+
     from json_to_xml_mapper import records_to_xml
-    xml = records_to_xml(records, time_pattern_starts)
+    xml = records_to_xml(filtered_records, time_pattern_starts)
 
     if DRY_RUN:
         print(xml)

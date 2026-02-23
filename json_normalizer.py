@@ -31,7 +31,7 @@ def parse_intakes(raw: str):
 def normalize_records(records):
     for r in records:
         r["subject_area"] = r["faculty"]
-        r["course_number"] = r["subject_raw"]
+        r["course_number"] = parse_course_number(r["subject_raw"])
         r["instructional_type"] = parse_instructional_type(r["subject_raw"])
         r["intakes"] = parse_intakes(r.get("intakes_raw"))
     return records
@@ -48,3 +48,12 @@ def parse_instructional_type(subject_full_code: str) -> str:
 
     # Safe default
     return "Lecture"
+
+def parse_course_number(subject_full_code: str) -> str:
+    parts = subject_full_code.split("-")
+
+    # Remove last two parts (L-1 or T-1 or P-1)
+    if len(parts) >= 2:
+        return "-".join(parts[:-2])
+
+    return subject_full_code
