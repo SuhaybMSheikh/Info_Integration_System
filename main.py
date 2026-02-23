@@ -1,5 +1,5 @@
 from excel_loader import load_excel
-from json_normalizer import normalize_records
+from json_normalizer import normalize_records, group_records
 from json_validators import validate_records
 from time_utils import parse_duration_to_minutes, coerce_duration
 from time_patterns import time_pattern_name, generate_start_times
@@ -12,6 +12,7 @@ from time_pattern_validators import validate_time_pattern_spacing
 from unitime_time_patterns import get_existing_time_patterns
 from time_pattern_resolver import resolve_time_pattern
 from unitime_courses import get_existing_courses
+from unitime_classes import get_existing_classes
 
 def main():
     records = load_excel("allocated-module-list.xlsx")
@@ -19,6 +20,8 @@ def main():
     validate_records(records)
     existing_courses = get_existing_courses()
     existing_patterns = get_existing_time_patterns()
+    grouped_records = group_records(records)
+    existing_classes = get_existing_classes()
 
     # validate_academic_session(get_sessions())
 
@@ -64,7 +67,7 @@ def main():
             filtered_records.append(r)
 
     from json_to_xml_mapper import records_to_xml
-    xml = records_to_xml(filtered_records, time_pattern_starts)
+    xml = records_to_xml(grouped_records, time_pattern_starts, existing_courses, existing_classes)
 
     if DRY_RUN:
         print(xml)

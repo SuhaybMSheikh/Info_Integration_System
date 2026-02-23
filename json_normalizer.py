@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 
 def parse_intakes(raw: str):
     if not raw:
@@ -57,3 +58,28 @@ def parse_course_number(subject_full_code: str) -> str:
         return "-".join(parts[:-2])
 
     return subject_full_code
+
+def group_records(records):
+    grouped = defaultdict(lambda: {
+        "subject_area": None,
+        "course_number": None,
+        "week_begins": None,
+        "classes": []
+    })
+
+    for r in records:
+        key = (
+            r["subject_area"],
+            r["course_number"],
+            r["week_begins"]
+        )
+
+        group = grouped[key]
+
+        group["subject_area"] = r["subject_area"]
+        group["course_number"] = r["course_number"]
+        group["week_begins"] = r["week_begins"]
+
+        group["classes"].append(r)
+
+    return list(grouped.values())

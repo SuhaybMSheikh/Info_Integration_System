@@ -32,9 +32,9 @@ def build_time_pattern_xml(name, start_times_hhmm):
 """
 
 # Main XML Builder
-def build_data_exchange_xml(records, time_patterns):
+def build_data_exchange_xml(grouped_records, time_patterns, existing_courses, existing_classes):
     instructors = {}
-    offerings = {}
+    offerings_xml = ""
     time_pattern_xml_blocks = []
 
     # Time Patterns
@@ -43,69 +43,112 @@ def build_data_exchange_xml(records, time_patterns):
             build_time_pattern_xml(tp_name, starts)
         )
 
-    # Records
-    for r in records:
-        # Instructors
-        instructors[r["lecturer_code"]] = f"""
+    # Instructional Offerings (Grouped)
+    for group in grouped_records:
+        subject_area = group["subject_area"]
+        course_number = group["course_number"]
+        classes = group["classes"]
+
+        course_key = (subject_area, course_number)
+
+        # Build class XML blocks
+        class_blocks = ""
+
+        for r in classes:
+
+            # Register instructor (unique)
+            instructors[r["lecturer_code"]] = f"""
 <instructor>
   <externalId>{xml_escape(r["lecturer_code"])}</externalId>
   <name>{xml_escape(r["lecturer_name"])}</name>
 </instructor>
 """
 
-        # Classes
-        class_xml = f"""
-<class>
-  <externalId>{xml_escape(r["class_code"])}</externalId>
-  <instructionalType>{xml_escape(r["instructional_type"])}</instructionalType>
-  <limit>{r["total_students"]}</limit>
-  <weeks>{r["duration_weeks"]}</weeks>
-  <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
-  <instructors>
-    <instructor externalId="{xml_escape(r["lecturer_code"])}"/>
-  </instructors>
-</class>
-"""
+            external_id = r["class_code"]
 
-        key = (r["subject_area"], r["course_number"])
-        offerings.setdefault(key, []).append(class_xml)
+            existing = existing_classes.get(external_id)
 
-    #  Assemble XML
-    instructors_xml = "".join(instructors.values())
+            action = "insert"
 
-    offerings_xml = ""
-    for (sa, cn), classes in offerings.items():
+            if existing:
+                # Compare fields
+                if (
+                        existing["limit"] != r["total_students"] or
+                        existing["instructor"] != r["lecturer_code"] or
+                        existing["weeks"] != r["duration_weeks"] or
+                        existing["timePattern"] != r["time_pattern_name"]
+                ):
+                    action = "update"
+                else:
+                    print(f"Class unchanged: {external_id}")
+                    continue  # Skip identical class
+
+            class_blocks += f"""
+            <class action="{action}">
+              <externalId>{xml_escape(external_id)}</externalId>
+              <instructionalType>{xml_escape(r["instructional_type"])}</instructionalType>
+              <limit>{r["total_students"]}</limit>
+              <weeks>{r["duration_weeks"]}</weeks>
+              <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
+              <instructors>
+                <instructor externalId="{xml_escape(r["lecturer_code"])}"/>
+              </instructors>
+            </class>
+            """
+
+        if not class_blocks.strip():
+            continue
+
+        # Determine offering action
+        offering_action = "insert"
+        if course_key in existing_courses:
+            offering_action = "update"
+
         offerings_xml += f"""
-<instructionalOffering>
-  <subject>{xml_escape(sa)}</subject>
-  <courseNumber>{xml_escape(cn)}</courseNumber>
-  <classes>
-    {''.join(classes)}
-  </classes>
-</instructionalOffering>
-"""
+        <instructionalOffering action="{offering_action}">
+          <subject>{xml_escape(subject_area)}</subject>
+          <courseNumber>{xml_escape(course_number)}</courseNumber>
 
+          <configurations>
+            <configuration>
+              <name>Default Config</name>
+              <classes>
+                {class_blocks}
+              </classes>
+            </configuration>
+          </configurations>
+
+        </instructionalOffering>
+        """
+
+        if offering_action == "update":
+            print(f"Updating existing course: {course_number}")
+        else:
+            print(f"Creating new course: {course_number}")
+
+    # Assemble XML
+    instructors_xml = "".join(instructors.values())
     session_xml = build_session_xml()
-    curricula_xml = build_curricula_xml(records)
+    curricula_xml = build_curricula_xml(grouped_records)
 
-    #  Final XML
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <dataExchange>
+
 {session_xml}
 
 {curricula_xml}
 
-  <timePatterns>
-    {''.join(time_pattern_xml_blocks)}
-  </timePatterns>
+<timePatterns>
+  {''.join(time_pattern_xml_blocks)}
+</timePatterns>
 
-  <instructors>
-    {instructors_xml}
-  </instructors>
+<instructors>
+  {instructors_xml}
+</instructors>
 
-  <instructionalOfferings>
-    {offerings_xml}
-  </instructionalOfferings>
+<instructionalOfferings>
+  {offerings_xml}
+</instructionalOfferings>
 
 </dataExchange>
 """
