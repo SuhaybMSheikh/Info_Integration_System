@@ -9,11 +9,14 @@ from unitime_checks import validate_academic_session
 from config import DEFAULT_BREAK_MINUTES, DRY_RUN
 from pre_import_validators import run_all_pre_import_validations
 from time_pattern_validators import validate_time_pattern_spacing
+from unitime_time_patterns import get_existing_time_patterns
+from time_pattern_resolver import resolve_time_pattern
 
 def main():
     records = load_excel("allocated-module-list.xlsx")
     records = normalize_records(records)
     validate_records(records)
+    existing_patterns = get_existing_time_patterns()
 
     # validate_academic_session(get_sessions())
 
@@ -41,7 +44,14 @@ def main():
         time_pattern_starts[name] = starts
 
     for name, starts in time_pattern_starts.items():
-        xml += build_time_pattern_xml(name, starts)
+        if not resolve_time_pattern(name, existing_patterns):
+            xml += build_time_pattern_xml(name, starts)
+
+        if resolve_time_pattern(name, existing_patterns):
+            print(f"Time pattern already exists: {name}")
+        else:
+            print(f"Creating time pattern: {name}")
+            xml += build_time_pattern_xml(name, starts)
 
     from json_to_xml_mapper import records_to_xml
     xml = records_to_xml(records, time_pattern_starts)
