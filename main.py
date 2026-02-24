@@ -69,10 +69,10 @@ def main():
     from json_to_xml_mapper import records_to_xml
     xml = records_to_xml(grouped_records, time_pattern_starts, existing_courses, existing_classes)
 
-    if DRY_RUN:
-        print(xml)
-    else:
+    if not DRY_RUN:
         post_xml(xml)
+    else:
+        print("Dry run enabled — XML not sent.")
 
 if __name__ == "__main__":
     main()
