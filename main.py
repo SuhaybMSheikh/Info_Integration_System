@@ -1,11 +1,11 @@
 from excel_loader import load_excel
-from json_normalizer import normalize_records, group_records, detect_instructor_conflicts
+from json_normalizer import normalize_records, group_records
 from json_validators import validate_records
 from time_utils import parse_duration_to_minutes, coerce_duration
 from time_patterns import time_pattern_name, generate_start_times
 from xml_builders import build_time_pattern_xml
 from unitime_client import post_xml, get_sessions
-from unitime_checks import validate_academic_session
+from unitime_checks import validate_academic_session, detect_instructor_conflicts
 from config import DEFAULT_BREAK_MINUTES, DRY_RUN
 from pre_import_validators import run_all_pre_import_validations
 from time_pattern_validators import validate_time_pattern_spacing
@@ -19,15 +19,13 @@ def main():
     sessions = get_sessions()
 
     print("Validating academic session...")
-    session_id = validate_academic_session(sessions)
+    validate_academic_session(sessions)
 
     records = load_excel("allocated-module-list.xlsx")
     records = normalize_records(records)
     validate_records(records)
     existing_courses = get_existing_courses()
     existing_patterns = get_existing_time_patterns()
-    grouped_records = group_records(records)
-    existing_classes = get_existing_classes()
 
     time_patterns = {}
     for r in records:
@@ -35,6 +33,10 @@ def main():
         r["duration_minutes"] = mins
         r["time_pattern_name"] = time_pattern_name(mins)
         time_patterns[mins] = r["time_pattern_name"]
+
+    grouped_records = group_records(records)
+
+    existing_classes = get_existing_classes()
 
     run_all_pre_import_validations(records)
 
@@ -52,23 +54,15 @@ def main():
 
         time_pattern_starts[name] = starts
 
+        print("Running advanced instructor conflict validation...")
+        detect_instructor_conflicts(grouped_records, time_pattern_starts)
+
     for name, starts in time_pattern_starts.items():
         if resolve_time_pattern(name, existing_patterns):
             print(f"Time pattern already exists: {name}")
         else:
             print(f"Creating time pattern: {name}")
             xml += build_time_pattern_xml(name, starts)
-
-    filtered_records = []
-
-    for r in records:
-        key = (r["subject_area"], r["course_number"])
-
-        if key in existing_courses:
-            print(f"Course already exists: {key}")
-        else:
-            print(f"Creating course: {key}")
-            filtered_records.append(r)
 
     from json_to_xml_mapper import records_to_xml
     xml = records_to_xml(grouped_records, time_pattern_starts, existing_courses, existing_classes)
