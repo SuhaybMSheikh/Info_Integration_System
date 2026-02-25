@@ -51,6 +51,15 @@ def build_data_exchange_xml(grouped_records, time_patterns, existing_courses, ex
 
         course_key = (subject_area, course_number)
 
+        existing_course = existing_courses.get(course_key)
+        config_name = "Default Config"
+
+        config_action = "insert"
+
+        if existing_course:
+            if existing_course and config_name in existing_course.get("configurations", {}):
+                config_action = "update"
+
         # Build class XML blocks
         class_blocks = ""
 
@@ -110,8 +119,8 @@ def build_data_exchange_xml(grouped_records, time_patterns, existing_courses, ex
           <courseNumber>{xml_escape(course_number)}</courseNumber>
 
           <configurations>
-            <configuration>
-              <name>Default Config</name>
+            <configuration action="{config_action}">
+              <name>{config_name}</name>
               <classes>
                 {class_blocks}
               </classes>
