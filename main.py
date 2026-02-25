@@ -1,5 +1,5 @@
 from excel_loader import load_excel
-from json_normalizer import normalize_records, group_records
+from json_normalizer import normalize_records, group_records, detect_instructor_conflicts
 from json_validators import validate_records
 from time_utils import parse_duration_to_minutes, coerce_duration
 from time_patterns import time_pattern_name, generate_start_times
@@ -15,6 +15,12 @@ from unitime_courses import get_existing_courses
 from unitime_classes import get_existing_classes
 
 def main():
+    print("Fetching sessions from UniTime...")
+    sessions = get_sessions()
+
+    print("Validating academic session...")
+    session_id = validate_academic_session(sessions)
+
     records = load_excel("allocated-module-list.xlsx")
     records = normalize_records(records)
     validate_records(records)
@@ -22,8 +28,6 @@ def main():
     existing_patterns = get_existing_time_patterns()
     grouped_records = group_records(records)
     existing_classes = get_existing_classes()
-
-    # validate_academic_session(get_sessions())
 
     time_patterns = {}
     for r in records:

@@ -83,3 +83,23 @@ def group_records(records):
         group["classes"].append(r)
 
     return list(grouped.values())
+
+def detect_instructor_conflicts(grouped_records):
+
+    instructor_schedule = {}
+
+    for group in grouped_records:
+        for r in group["classes"]:
+
+            instructor = r["lecturer_code"]
+            time_pattern = r["time_pattern_name"]
+
+            key = (instructor, time_pattern)
+
+            if key in instructor_schedule:
+                raise Exception(
+                    f"Instructor conflict detected for {instructor} "
+                    f"at time pattern {time_pattern}"
+                )
+
+            instructor_schedule[key] = True
