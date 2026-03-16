@@ -1,3 +1,5 @@
+import sys
+from datetime import datetime
 from excel_loader import load_excel
 from json_normalizer import normalize_records, group_records
 from json_validators import validate_records
@@ -38,7 +40,20 @@ def main():
 
     existing_classes = get_existing_classes()
 
-    run_all_pre_import_validations(records)
+    print("\n=== PRE-FLIGHT VALIDATION ===")
+
+    try:
+        run_all_pre_import_validations(records)
+        print("Record validation passed.")
+
+        print("Instructor conflict validation passed.")
+
+        print("All validations passed successfully.")
+
+    except Exception as e:
+        print("\n❌ VALIDATION FAILED")
+        print(str(e))
+        sys.exit(1)
 
     xml = ""
 
@@ -67,10 +82,44 @@ def main():
     from json_to_xml_mapper import records_to_xml
     xml = records_to_xml(grouped_records, time_pattern_starts, existing_courses, existing_classes)
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    snapshot_filename = f"xml_snapshot_{timestamp}.xml"
+
+    with open(snapshot_filename, "w", encoding="utf-8") as f:
+        f.write(xml)
+
+    print(f"XML snapshot saved to: {snapshot_filename}")
+
+    #1. IF PUSHING DATA USING XML FILE:
     if not DRY_RUN:
-        post_xml(xml)
+        with open("unitime_export.xml", "w", encoding="utf-8") as f:
+            f.write(xml)
+
+        print("XML file generated: unitime_export.xml")
     else:
         print("Dry run enabled — XML not sent.")
+
+    #2. IF PUSHING DATA USING API:
+    # if not DRY_RUN:
+    #
+    #     confirm = input(
+    #         "\n You are about to push data to UniTime.\n"
+    #         "Type 'CONFIRM' to proceed: "
+    #     )
+    #
+    #     if confirm != "CONFIRM":
+    #         print("Push aborted.")
+    #         sys.exit(0)
+    #
+    #     try:
+    #         post_xml(xml)
+    #     except Exception as e:
+    #         print("\n IMPORT FAILED")
+    #         print(str(e))
+    #         sys.exit(1)
+    #
+    # else:
+    #     print("Dry run enabled — XML not sent.")
 
 if __name__ == "__main__":
     main()
