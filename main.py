@@ -1,6 +1,7 @@
 import sys
 from datetime import datetime
 from excel_loader import load_excel
+from json_loader import fetch_api_payload, flatten_api_payload
 from json_normalizer import normalize_records, group_records
 from json_validators import validate_records
 from time_utils import parse_duration_to_minutes, coerce_duration
@@ -23,8 +24,15 @@ def main():
     print("Validating academic session...")
     validate_academic_session(sessions)
 
-    records = load_excel("allocated-module-list.xlsx")
-    records = normalize_records(records)
+    print("Fetching data from IIS API...")
+
+    payload = fetch_api_payload()
+    flattened = flatten_api_payload(payload)
+
+    records = normalize_records(flattened)
+    validate_records(records)
+    grouped_records = group_records(records)
+
     validate_records(records)
     existing_courses = get_existing_courses()
     existing_patterns = get_existing_time_patterns()

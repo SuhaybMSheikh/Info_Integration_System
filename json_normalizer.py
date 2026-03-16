@@ -1,63 +1,77 @@
-import re
 from collections import defaultdict
+from time_utils import parse_duration_to_minutes, coerce_duration
+from config import EXPECTED_ACADEMIC_SESSION
 
-def parse_intakes(raw: str):
-    if not raw:
-        return []
-
-    intakes = []
-
-    parts = raw.split(",")
-
-    for p in parts:
-        p = p.strip()
-
-        # Find last (...) group containing digits
-        match = re.search(r"\((\d+)\)\s*$", p)
-        if not match:
-            continue
-
-        students = int(match.group(1))
-
-        # Remove final (number) part to get intake code
-        code = re.sub(r"\(\d+\)\s*$", "", p).strip()
-
-        intakes.append({
-            "code": code,
-            "students": students
-        })
-
-    return intakes
 
 def normalize_records(records):
+
+    normalized = []
+
     for r in records:
-        r["subject_area"] = r["faculty"]
-        r["course_number"] = parse_course_number(r["subject_raw"])
-        r["instructional_type"] = parse_instructional_type(r["subject_raw"])
-        r["intakes"] = parse_intakes(r.get("intakes_raw"))
-    return records
 
-def parse_instructional_type(subject_full_code: str) -> str:
-    code = subject_full_code.upper()
+        # Academic session validation
+        if r["academic_session"] != EXPECTED_ACADEMIC_SESSION:
+            raise RuntimeError(
+                f"Academic session mismatch.\n"
+                f"Expected: {EXPECTED_ACADEMIC_SESSION}\n"
+                f"Received: {r['academic_session']}"
+            )
 
-    if "-L-" in code:
+        class_code = r["class_code"]
+
+        course_number = parse_course_number_from_class(class_code)
+        instructional_type = parse_instructional_type_from_class(class_code)
+
+        duration_minutes = coerce_duration(
+            parse_duration_to_minutes(r["class_duration_raw"])
+        )
+
+        normalized.append({
+            "academic_session": r["academic_session"],
+            "week_begins": r["week_begins"],
+            "subject_area": r["faculty"],
+            "course_number": course_number,
+            "class_code": class_code,
+            "class_duration_raw": r["class_duration_raw"],
+            "duration_minutes": duration_minutes,
+            "duration_weeks": r["duration_weeks"],
+            "instructional_type": instructional_type,
+            "lecturer_code": r["lecturer_code"],
+            "lecturer_name": r["lecturer_name"],
+            "total_students": r["total_students"],
+            "intakes": r["intakes"]
+        })
+
+    return normalized
+
+
+def parse_instructional_type_from_class(class_code: str) -> str:
+    if "-L-" in class_code:
         return "Lecture"
-    if "-T-" in code:
+    if "-T-" in class_code:
         return "Tutorial"
-    if "-P-" in code:
+    if "-P-" in class_code:
         return "Practical"
-
-    # Safe default
     return "Lecture"
 
-def parse_course_number(subject_full_code: str) -> str:
-    parts = subject_full_code.split("-")
 
-    # Remove last two parts (L-1 or T-1 or P-1)
+def parse_course_number_from_class(class_code: str) -> str:
+    """
+    Example:
+    SoMAQS___AAQS005-4-1-QM-L-1___2026-07-06
+
+    We extract:
+    AAQS005-4-1-QM
+    """
+
+    middle = class_code.split("___")[1]
+    parts = middle.split("-")
+
     if len(parts) >= 2:
         return "-".join(parts[:-2])
 
-    return subject_full_code
+    return middle
+
 
 def group_records(records):
     grouped = defaultdict(lambda: {

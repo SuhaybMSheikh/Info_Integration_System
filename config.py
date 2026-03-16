@@ -4,6 +4,13 @@ from dotenv import load_dotenv
 UNITIME_BASE_URL = "https://unitime3.apu.edu.my/UniTime"
 DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/dataExchange"
 
+API_BASE_URL = "https://610bt8b6g2.execute-api.ap-southeast-1.amazonaws.com/dev/iis-temp/unitime/schedules"
+
+API_KEY = "YOUR_API_KEY_HERE"
+
+API_START_DATE = "2026-01-01"
+API_END_DATE = "2026-31-01"
+
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 
