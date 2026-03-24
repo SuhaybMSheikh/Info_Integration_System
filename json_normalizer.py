@@ -74,26 +74,32 @@ def parse_course_number_from_class(class_code: str) -> str:
 
 
 def group_records(records):
-    grouped = defaultdict(lambda: {
-        "subject_area": None,
-        "course_number": None,
-        "week_begins": None,
-        "classes": []
-    })
-
+    grouped = {}
     for r in records:
         key = (
             r["subject_area"],
             r["course_number"],
             r["week_begins"]
         )
-
-        group = grouped[key]
-
-        group["subject_area"] = r["subject_area"]
-        group["course_number"] = r["course_number"]
-        group["week_begins"] = r["week_begins"]
-
-        group["classes"].append(r)
-
+        if key not in grouped:
+            grouped[key] = {
+                "subject_area": r["subject_area"],
+                "course_number": r["course_number"],
+                "week_begins": r["week_begins"],
+                "classes": []
+            }
+        grouped[key]["classes"].append(r)
     return list(grouped.values())
+
+def filter_duplicates_by_class_code(records):
+    seen = set()
+    filtered = []
+    duplicates = []
+    for r in records:
+        code = r["class_code"]
+        if code in seen:
+            duplicates.append(r)
+        else:
+            filtered.append(r)
+            seen.add(code)
+    return filtered, duplicates

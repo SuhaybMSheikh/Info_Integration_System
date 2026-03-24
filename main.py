@@ -1,8 +1,9 @@
 import sys
 from datetime import datetime
+import os
 # from excel_loader import load_excel
 from json_loader import fetch_api_payload, flatten_api_payload
-from json_normalizer import normalize_records, group_records
+from json_normalizer import normalize_records, group_records, filter_duplicates_by_class_code
 from json_validators import validate_records
 from time_utils import parse_duration_to_minutes, coerce_duration
 from time_patterns import time_pattern_name, generate_start_times
@@ -36,9 +37,26 @@ def main():
 
     records = normalize_records(flattened)
 
-    validate_records(records)
+    # Filter duplicates by class_code: keep first, log others
+    filtered_records, duplicates = filter_duplicates_by_class_code(records)
 
-    grouped_records = group_records(records)
+    # Ensure the 'Duplicated Files' directory exists
+    duplicates_dir = os.path.join(os.path.dirname(__file__), "Duplicated Files")
+    os.makedirs(duplicates_dir, exist_ok=True)
+
+    # Write duplicate records to .txt files in the folder
+    for dup in duplicates:
+        class_code = dup["class_code"]
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"duplicate_{class_code}_{timestamp}.txt"
+        filepath = os.path.join(duplicates_dir, filename)
+        with open(filepath, "w", encoding="utf-8") as f:
+            for k, v in dup.items():
+                f.write(f"{k}: {v}\n")
+
+    validate_records(filtered_records)
+
+    grouped_records = group_records(filtered_records)
 
     # === UniTime existing data checks (DISABLED) ===
     # existing_courses = get_existing_courses()
@@ -110,12 +128,16 @@ def main():
 
     from json_to_xml_mapper import records_to_xml
 
+
     xml = records_to_xml(
         grouped_records,
         time_pattern_starts,
         existing_courses,
         existing_classes
     )
+
+    # Print the generated XML to the console
+    print("=== XML OUTPUT ===\n" + xml)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     snapshot_filename = f"xml_snapshot_{timestamp}.xml"

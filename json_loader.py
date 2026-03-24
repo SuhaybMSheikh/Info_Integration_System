@@ -5,7 +5,7 @@ from config import API_BASE_URL, API_KEY, API_START_DATE, API_END_DATE
 
 def fetch_api_payload():
     headers = {
-        "X_API_KEY": os.getenv("IIS_API_KEY")
+        "X_API_KEY": API_KEY
     }
 
     params = {
