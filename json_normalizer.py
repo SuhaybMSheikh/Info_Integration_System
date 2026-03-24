@@ -52,6 +52,8 @@ def parse_instructional_type_from_class(class_code: str) -> str:
         return "Tutorial"
     if "-P-" in class_code:
         return "Practical"
+    if "Lab" in class_code or "-Lab-" in class_code:
+        return "Lab"
     return "Lecture"
 
 
