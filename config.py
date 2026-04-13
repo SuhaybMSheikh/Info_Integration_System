@@ -17,7 +17,7 @@ PASSWORD = os.getenv("PASSWORD")
 
 EXPECTED_ACADEMIC_SESSION = "2026 2026"
 
-# Operational hours (used later by time pattern logic)
+# Operational hours
 DAY_START = "08:30"
 DAY_END = "17:00"
 TIME_STEP_MINUTES = 15

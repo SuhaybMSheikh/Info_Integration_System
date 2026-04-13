@@ -53,6 +53,8 @@ def flatten_api_payload(payload):
                     "faculty": area,
                     "subject_raw": full_code,
                     "class_code": cls["code"],
+                    "type_and_number": cls.get("type_and_number"),
+                    "module_code": cls.get("module_code"),
                     "class_duration_raw": cls["duration"],
                     "duration_weeks": cls["weeks"],
                     "total_students": cls["number_of_students"],

@@ -39,7 +39,7 @@ def post_xml(xml_data: str):
 
         print(f"Response saved to: {log_filename}")
 
-        # 3 Fail loudly if error
+        # 3 Fail if error
         if response.status_code >= 400:
             logging.error(f"Import failed {response.text}")
             print(response.text)

@@ -19,8 +19,12 @@ def normalize_records(records):
 
         class_code = r["class_code"]
 
-        course_number = parse_course_number_from_class(class_code)
-        instructional_type = parse_instructional_type_from_class(class_code)
+        course_number = parse_course_number_from_class(
+            r.get("module_code") or class_code
+        )
+        instructional_type = parse_instructional_type_from_class(
+            r.get("type_and_number") or class_code
+        )
 
         duration_minutes = coerce_duration(
             parse_duration_to_minutes(r["class_duration_raw"])
@@ -45,28 +49,44 @@ def normalize_records(records):
     return normalized
 
 
-def parse_instructional_type_from_class(class_code: str) -> str:
-    if "-L-" in class_code:
+def parse_instructional_type_from_class(value: str) -> str:
+    if not value:
         return "Lecture"
-    if "-T-" in class_code:
+    if "___" in value:
+        if "-L-" in value:
+            return "Lecture"
+        if "-T-" in value:
+            return "Tutorial"
+        if "-P-" in value:
+            return "Practical"
+        if "Lab" in value or "-Lab-" in value:
+            return "Lab"
+        return "Lecture"
+    # API type_and_number: "{instructional_type}-{group_number}" e.g. L-1, Lab-T-2
+    if "Lab-T" in value:
         return "Tutorial"
-    if "-P-" in class_code:
-        return "Practical"
-    if "Lab" in class_code or "-Lab-" in class_code:
+    if "L-T" in value:
+        return "Tutorial"
+    if "Lab" in value:
         return "Lab"
+    if "T" in value:
+        return "Tutorial"
+    if "L" in value:
+        return "Lecture"
     return "Lecture"
 
 
-def parse_course_number_from_class(class_code: str) -> str:
+def parse_course_number_from_class(code_or_module: str) -> str:
     """
-    Example:
-    SoMAQS___AAQS005-4-1-QM-L-1___2026-07-06
+    New API: pass module_code directly (already formatted); returned unchanged.
 
-    We extract:
-    AAQS005-4-1-QM
+    Legacy class code: e.g. SoMAQS___AAQS005-4-1-QM-L-1___2026-07-06
+    extracts AAQS005-4-1-QM from the middle segment.
     """
+    if "___" not in code_or_module:
+        return code_or_module
 
-    middle = class_code.split("___")[1]
+    middle = code_or_module.split("___")[1]
     parts = middle.split("-")
 
     if len(parts) >= 2:
