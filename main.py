@@ -131,6 +131,7 @@ def main():
 
     xml = records_to_xml(
         grouped_records,
+        filtered_records,
         time_pattern_starts,
         existing_courses,
         existing_classes

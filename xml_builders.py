@@ -32,7 +32,7 @@ def build_time_pattern_xml(name, start_times_hhmm):
 """
 
 # Main XML Builder
-def build_data_exchange_xml(grouped_records, time_patterns, existing_courses, existing_classes):
+def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existing_courses, existing_classes):
     instructors = {}
     offerings_xml = ""
     time_pattern_xml_blocks = []
@@ -138,7 +138,7 @@ def build_data_exchange_xml(grouped_records, time_patterns, existing_courses, ex
     # Assemble XML
     instructors_xml = "".join(instructors.values())
     session_xml = build_session_xml()
-    curricula_xml = build_curricula_xml(grouped_records)
+    curricula_xml = build_curricula_xml(flat_records)
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <dataExchange>
@@ -172,32 +172,37 @@ def build_session_xml():
 """
 
 def build_curricula_xml(records):
+    # Deduplicate projections: a curriculum (intake) may appear across multiple
+    # class records for the same course; UniTime expects one projection per
+    # (intake_code, subject, courseNumber).
     curricula = {}
 
     for r in records:
-        if "intakes" not in r or not r["intakes"]:
+        intakes = r.get("intakes") or []
+        if not intakes:
             continue
 
-        for intake in r["intakes"]:
-            key = intake["code"]
+        subject = r["subject_area"]
+        course = r["course_number"]
 
-            curricula.setdefault(key, []).append({
-                "subject": r["subject_area"],
-                "course": r["course_number"],
-                "students": intake["students"]
-            })
+        for intake in intakes:
+            intake_code = intake["code"]
+            students = intake.get("students", 0) or 0
+
+            by_course = curricula.setdefault(intake_code, {})
+            by_course[(subject, course)] = by_course.get((subject, course), 0) + students
 
     xml_blocks = []
 
-    for intake_code, projections in curricula.items():
+    for intake_code, projections_map in curricula.items():
         projections_xml = ""
 
-        for p in projections:
+        for (subject, course), students in projections_map.items():
             projections_xml += f"""
         <courseProjection>
-          <subject>{xml_escape(p["subject"])}</subject>
-          <courseNumber>{xml_escape(p["course"])}</courseNumber>
-          <students>{p["students"]}</students>
+          <subject>{xml_escape(subject)}</subject>
+          <courseNumber>{xml_escape(course)}</courseNumber>
+          <students>{students}</students>
         </courseProjection>
 """
 
