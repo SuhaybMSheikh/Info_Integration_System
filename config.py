@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-UNITIME_BASE_URL = "https://unitime3.apu.edu.my/UniTime"
+UNITIME_BASE_URL = "http://localhost:8080/UniTime"
 DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/api/exchange"
 
 API_BASE_URL = "https://610bt8b6g2.execute-api.ap-southeast-1.amazonaws.com/dev/iis-temp/unitime/schedules"
@@ -14,6 +14,7 @@ API_END_DATE = "2026-01-31"
 
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
+UNITIME_TOKEN = os.getenv("UNITIME_TOKEN")
 
 EXPECTED_ACADEMIC_SESSION = "2026 2026"
 
@@ -26,4 +27,4 @@ DEFAULT_BREAK_MINUTES = 15
 # Control behavior
 ALLOW_DATE_PATTERN_CREATION = True
 FAIL_ON_MISSING_CURRICULUM = True
-DRY_RUN = True
+DRY_RUN = False

@@ -11,12 +11,12 @@ from xml_builders import build_time_pattern_xml
 
 # === UniTime dependencies (DISABLED FOR OFFLINE MODE) ===
 from unitime_client import post_xml
-from unitime_sessions import get_sessions
-from unitime_checks import validate_academic_session, detect_instructor_conflicts
-from unitime_time_patterns import get_existing_time_patterns
-from time_pattern_resolver import resolve_time_pattern
-from unitime_courses import get_existing_courses
-from unitime_classes import get_existing_classes
+# from unitime_sessions import get_sessions
+# from unitime_checks import validate_academic_session, detect_instructor_conflicts
+# from unitime_time_patterns import get_existing_time_patterns
+# from time_pattern_resolver import resolve_time_pattern
+# from unitime_courses import get_existing_courses
+# from unitime_classes import get_existing_classes
 
 from config import DEFAULT_BREAK_MINUTES, DRY_RUN
 from pre_import_validators import run_all_pre_import_validations
@@ -26,10 +26,10 @@ from time_pattern_validators import validate_time_pattern_spacing
 def main():
     # === UniTime session validation (DISABLED) ===
     print("Fetching sessions from UniTime...")
-    sessions = get_sessions()
+    # sessions = get_sessions()
     
     print("Validating academic session...")
-    validate_academic_session(sessions)
+    # validate_academic_session(sessions)
 
     print("Fetching data from IIS API...")
 
@@ -60,13 +60,13 @@ def main():
     grouped_records = group_records(filtered_records)
 
     # === UniTime existing data checks (DISABLED) ===
-    existing_courses = get_existing_courses()
-    existing_patterns = get_existing_time_patterns()
-    existing_classes = get_existing_classes()
+    # existing_courses = get_existing_courses()
+    # existing_patterns = get_existing_time_patterns()
+    # existing_classes = get_existing_classes()
 
-    # existing_courses = {}
-    # existing_patterns = {}
-    # existing_classes = {}
+    existing_courses = {}
+    existing_patterns = {}
+    existing_classes = {}
 
     time_patterns = {}
 
@@ -87,7 +87,7 @@ def main():
 
         # Instructor conflict validation using UniTime data
         # === (DISABLED — still possible locally if needed) ===
-        detect_instructor_conflicts(grouped_records)
+        # detect_instructor_conflicts(grouped_records)
 
         print("Instructor conflict validation skipped (offline mode).")
 
@@ -115,17 +115,24 @@ def main():
 
         time_pattern_starts[name] = starts
 
-    # === UniTime time pattern existence checks (DISABLED) ===
-    for name, starts in time_pattern_starts.items():
 
-        if resolve_time_pattern(name, existing_patterns):
-            print(f"Time pattern already exists: {name}")
-        else:
-            print(f"Creating time pattern: {name}")
-            xml += build_time_pattern_xml(name, starts)
-
-        print(f"Generating time pattern: {name}")
+    # === UniTime time pattern validation checks (DISABLED) ===
+        print(f"Creating time pattern: {name}")
         xml += build_time_pattern_xml(name, starts)
+
+
+
+    # === UniTime time pattern existence checks (DISABLED) ===
+    # for name, starts in time_pattern_starts.items():
+
+    #     if resolve_time_pattern(name, existing_patterns):
+    #         print(f"Time pattern already exists: {name}")
+    #     else:
+    #         print(f"Creating time pattern: {name}")
+    #         xml += build_time_pattern_xml(name, starts)
+
+    #     print(f"Generating time pattern: {name}")
+    #     xml += build_time_pattern_xml(name, starts)
 
     from json_to_xml_mapper import records_to_xml
 

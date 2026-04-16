@@ -1,13 +1,12 @@
 import requests
-from config import UNITIME_BASE_URL, USERNAME, PASSWORD
+from config import UNITIME_BASE_URL, USERNAME, PASSWORD, UNITIME_TOKEN
 
 def get_existing_courses():
     url = f"{UNITIME_BASE_URL}/api/sectioning?operation=course-offerings&term=2026"
 
     try:
         response = requests.get(
-            url,
-            auth=(USERNAME, PASSWORD),
+            url + f"&token={UNITIME_TOKEN}",
             timeout=30
         )
 

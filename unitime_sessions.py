@@ -1,13 +1,12 @@
 import requests
-from config import UNITIME_BASE_URL, USERNAME, PASSWORD
+from config import UNITIME_BASE_URL, USERNAME, PASSWORD, UNITIME_TOKEN
 
 def get_sessions():
 
     url = f"{UNITIME_BASE_URL}/api/sectioning?operation=academic-session"
 
     response = requests.get(
-        url,
-        auth=(USERNAME, PASSWORD),
+        url + f"&token={UNITIME_TOKEN}",
         timeout=30
     )
 

@@ -1,6 +1,6 @@
 import requests
 from datetime import datetime
-from config import USERNAME, PASSWORD, DATA_EXCHANGE_ENDPOINT, UNITIME_BASE_URL
+from config import USERNAME, PASSWORD, DATA_EXCHANGE_ENDPOINT, UNITIME_BASE_URL, UNITIME_TOKEN
 import logging
 
 logging.basicConfig(
@@ -19,9 +19,13 @@ def post_xml(xml_data: str):
     try:
         response = requests.post(
             DATA_EXCHANGE_ENDPOINT,
+            params={
+                "term": "2026",
+                "type": "courseOfferings",
+                "token": UNITIME_TOKEN
+            },
             data=xml_data.encode("utf-8"),
             headers=headers,
-            auth=(USERNAME, PASSWORD),
             timeout=60
         )
 
