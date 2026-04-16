@@ -64,9 +64,9 @@ def main():
     existing_patterns = get_existing_time_patterns()
     existing_classes = get_existing_classes()
 
-    existing_courses = {}
-    existing_patterns = {}
-    existing_classes = {}
+    # existing_courses = {}
+    # existing_patterns = {}
+    # existing_classes = {}
 
     time_patterns = {}
 
