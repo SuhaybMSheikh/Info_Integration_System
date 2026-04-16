@@ -3,7 +3,7 @@ from config import UNITIME_BASE_URL, USERNAME, PASSWORD
 
 def get_sessions():
 
-    url = f"{UNITIME_BASE_URL}/api/sessions"
+    url = f"{UNITIME_BASE_URL}/api/sectioning?operation=academic-session"
 
     response = requests.get(
         url,

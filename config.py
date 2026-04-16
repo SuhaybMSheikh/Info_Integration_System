@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 UNITIME_BASE_URL = "https://unitime3.apu.edu.my/UniTime"
-DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/dataExchange"
+DATA_EXCHANGE_ENDPOINT = f"{UNITIME_BASE_URL}/api/exchange"
 
 API_BASE_URL = "https://610bt8b6g2.execute-api.ap-southeast-1.amazonaws.com/dev/iis-temp/unitime/schedules"
 

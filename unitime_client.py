@@ -52,21 +52,21 @@ def post_xml(xml_data: str):
         print("\n Connection Error")
         raise e
 
-def get_sessions():
-    url = f"{DATA_EXCHANGE_ENDPOINT}/sessions"
+# def get_sessions():
+#     url = f"{DATA_EXCHANGE_ENDPOINT}/sessions"
 
-    try:
-        response = requests.get(
-            url,
-            auth=(USERNAME, PASSWORD),
-            timeout=30
-        )
+#     try:
+#         response = requests.get(
+#             url,
+#             auth=(USERNAME, PASSWORD),
+#             timeout=30
+#         )
 
-        if response.status_code != 200:
-            raise Exception("Failed to fetch sessions")
+#         if response.status_code != 200:
+#             raise Exception("Failed to fetch sessions")
 
-        return response.json()
+#         return response.json()
 
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Session fetch error: {str(e)}")
-        raise e
+#     except requests.exceptions.RequestException as e:
+#         logging.error(f"Session fetch error: {str(e)}")
+#         raise e
