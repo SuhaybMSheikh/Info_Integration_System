@@ -36,6 +36,7 @@ def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existi
     instructors = {}
     offerings_xml = ""
     time_pattern_xml_blocks = []
+    year, term = EXPECTED_ACADEMIC_SESSION.split()
 
     # Time Patterns
     for tp_name, starts in time_patterns.items():
@@ -99,9 +100,9 @@ def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existi
               <limit>{r["total_students"]}</limit>
               <weeks>{r["duration_weeks"]}</weeks>
               <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
-              <instructors>
-                <instructor externalId="{xml_escape(r["lecturer_code"])}"/>
-              </instructors>
+              <staff term="{term}" year="{year}" campus="APU">
+                <employee externalId="{xml_escape(r["lecturer_code"])}"/>
+              </staff>
             </class>
             """
 
@@ -155,9 +156,9 @@ def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existi
   {instructors_xml}
 </instructors>
 
-<instructionalOfferings>
+<offerings term="{term}" year="{year}" campus="APU" incremental="true">
   {offerings_xml}
-</instructionalOfferings>
+</offerings>
 
 </dataExchange>
 """
@@ -165,10 +166,9 @@ def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existi
 def build_session_xml():
     year, term = EXPECTED_ACADEMIC_SESSION.split()
     return f"""
-  <session>
-    <academicYear>{year}</academicYear>
-    <term>{term}</term>
-  </session>
+  <unitime type="base" term="{term}" year="{year}" campus="APU" incremental="true">
+    <!-- Leave empty or add a comment -->
+</unitime>
 """
 
 def build_curricula_xml(records):
@@ -176,6 +176,7 @@ def build_curricula_xml(records):
     # class records for the same course; UniTime expects one projection per
     # (intake_code, subject, courseNumber).
     curricula = {}
+    year, term = EXPECTED_ACADEMIC_SESSION.split()
 
     for r in records:
         intakes = r.get("intakes") or []
@@ -217,7 +218,7 @@ def build_curricula_xml(records):
 """)
 
     return f"""
-<curricula>
+<curricula term="{term}" year="{year}" campus="APU">
   {''.join(xml_blocks)}
 </curricula>
 """
