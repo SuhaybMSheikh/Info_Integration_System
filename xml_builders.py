@@ -1,4 +1,6 @@
 from datetime import datetime
+import zipfile
+import os
 from config import EXPECTED_ACADEMIC_SESSION
 
 def xml_escape(s: str) -> str:
@@ -18,18 +20,17 @@ def format_date(d: str) -> str:
 
 # Time Patterns
 def build_time_pattern_xml(name, start_times_hhmm):
+    """Returns a single time pattern block."""
     times_xml = "".join(
         f'<time start="{t}"/>' for t in start_times_hhmm
     )
-
     return f"""
-<timePattern>
-  <name>{xml_escape(name)}</name>
-  <times>
-    {times_xml}
-  </times>
-</timePattern>
-"""
+  <timePattern>
+    <name>{xml_escape(name)}</name>
+    <times>
+      {times_xml}
+    </times>
+  </timePattern>"""
 
 # Main XML Builder
 def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existing_courses, existing_classes):
@@ -222,3 +223,94 @@ def build_curricula_xml(records):
   {''.join(xml_blocks)}
 </curricula>
 """
+
+def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existing_courses, existing_classes, output_path="unitime_import.zip"):
+    year, term = EXPECTED_ACADEMIC_SESSION.split()
+    campus = "APU"
+
+    # 1. Build Session XML
+    session_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<unitime type="base" term="{term}" year="{year}" campus="{campus}" incremental="true">
+</unitime>"""
+
+    tp_blocks = "".join([build_time_pattern_xml(name, starts) for name, starts in time_patterns.items()])
+    time_patterns_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<timePatterns term="{term}" year="{year}" campus="{campus}">
+{tp_blocks}
+</timePatterns>"""
+
+    # 2. Build Staff (Instructor) XML
+    staff_entries = {}
+    for group in grouped_records:
+        for r in group["classes"]:
+            staff_entries[r["lecturer_code"]] = f'<employee externalId="{xml_escape(r["lecturer_code"])}" firstName="{xml_escape(r["lecturer_name"])}" lastName=""/>'
+    
+    staff_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<staff term="{term}" year="{year}" campus="{campus}">
+{"".join(staff_entries.values())}
+</staff>"""
+
+    # 3. Build Curricula XML
+    # Note: Using your existing build_curricula_xml logic but ensuring it's standalone
+    curricula_content = build_curricula_xml(flat_records)
+    curricula_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+{curricula_content}"""
+
+    # 4. Build Offerings XML
+    offerings_body = ""
+    for group in grouped_records:
+        subject_area = group["subject_area"]
+        course_number = group["course_number"]
+        course_key = (subject_area, course_number)
+        
+        class_blocks = ""
+        for r in group["classes"]:
+            action = "update" if existing_classes.get(r["class_code"]) else "insert"
+            
+            class_blocks += f"""
+            <class action="{action}" type="{xml_escape(r["instructional_type"])}" limit="{r["total_students"]}" externalId="{xml_escape(r["class_code"])}">
+              <weeks>{r["duration_weeks"]}</weeks>
+              <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
+              <instructor externalId="{xml_escape(r["lecturer_code"])}" responsibility="Teaching"/>
+            </class>"""
+
+        if not class_blocks.strip(): continue
+
+        off_action = "update" if course_key in existing_courses else "insert"
+        offerings_body += f"""
+        <instructionalOffering action="{off_action}">
+          <subject>{xml_escape(subject_area)}</subject>
+          <courseNumber>{xml_escape(course_number)}</courseNumber>
+          <configurations>
+            <configuration action="insert" name="Default Config">
+              <classes>{class_blocks}</classes>
+            </configuration>
+          </configurations>
+        </instructionalOffering>"""
+
+    offerings_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<offerings term="{term}" year="{year}" campus="{campus}" incremental="true">
+{offerings_body}
+</offerings>"""
+
+    # Create the Zip
+    return create_unitime_zip_package(output_path, session_xml, time_patterns_xml, staff_xml, curricula_xml, offerings_xml)
+
+def create_unitime_zip_package(output_zip_path, session_xml, time_patterns_xml, staff_xml, curricula_xml, offerings_xml):
+    """
+    Creates a zip archive containing the four required UniTime XML files.
+    """
+    try:
+        with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as unitime_zip:
+            # Writing each individual XML string into its own file inside the zip
+            unitime_zip.writestr("1. session.xml", session_xml)
+            unitime_zip.writestr("2. time_patterns.xml", time_patterns_xml)
+            unitime_zip.writestr("3. staff.xml", staff_xml)
+            unitime_zip.writestr("4. curricula.xml", curricula_xml)
+            unitime_zip.writestr("5. offerings.xml", offerings_xml)
+            
+        print(f"Successfully created: {output_zip_path}")
+        return True
+    except Exception as e:
+      print(f"Error creating zip: {e}")
+      return False
