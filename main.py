@@ -10,7 +10,7 @@ from time_patterns import time_pattern_name, generate_start_times
 from xml_builders import build_time_pattern_xml
 
 # === UniTime dependencies (DISABLED FOR OFFLINE MODE) ===
-from unitime_client import post_xml
+from unitime_client import post_xml, post_xml_file
 # from unitime_sessions import get_sessions
 # from unitime_checks import validate_academic_session, detect_instructor_conflicts
 # from unitime_time_patterns import get_existing_time_patterns
@@ -116,7 +116,7 @@ def main():
         time_pattern_starts[name] = starts
 
 
-    # === UniTime time pattern validation checks (DISABLED) ===
+    # === UniTime time pattern creation (does not validate time pattern) ===
         print(f"Creating time pattern: {name}")
         xml += build_time_pattern_xml(name, starts)
 
@@ -182,7 +182,7 @@ def main():
             sys.exit(0)
     
         try:
-            post_xml(xml)
+            post_xml_file(snapshot_filename)
         except Exception as e:
             print("\n IMPORT FAILED")
             print(str(e))
