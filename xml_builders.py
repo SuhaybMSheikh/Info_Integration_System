@@ -307,36 +307,37 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
 {curricula_content}"""
 
     # 4. Build Offerings XML
+
     offerings_body = ""
     for group in grouped_records:
         subject_area = group["subject_area"]
         course_number = group["course_number"]
         course_key = (subject_area, course_number)
-        
+
         class_blocks = ""
         for r in group["classes"]:
             action = "update" if existing_classes.get(r["class_code"]) else "insert"
-            
+
             class_blocks += f"""
             <class action="{action}" type="{xml_escape(r["instructional_type"])}" limit="{r["total_students"]}" externalId="{xml_escape(r["class_code"])}">
               <weeks>{r["duration_weeks"]}</weeks>
-              <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
+              <timePattern>{xml_escape(r["time_pattern_name"])} </timePattern>
               <instructor externalId="{xml_escape(r["lecturer_code"])}" responsibility="Teaching"/>
             </class>"""
 
-        if not class_blocks.strip(): continue
+        if not class_blocks.strip():
+            continue
 
         off_action = "update" if course_key in existing_courses else "insert"
         offerings_body += f"""
-        <instructionalOffering action="{off_action}">
-          <subject>{xml_escape(subject_area)}</subject>
-          <courseNumber>{xml_escape(course_number)}</courseNumber>
+        <offering action="{off_action}">
+          <course subject="{xml_escape(subject_area)}" courseNbr="{xml_escape(course_number)}" controlling="true"/>
           <configurations>
             <configuration action="insert" name="Default Config">
               <classes>{class_blocks}</classes>
             </configuration>
           </configurations>
-        </instructionalOffering>"""
+        </offering>"""
 
     offerings_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <offerings term="{term}" year="{year}" campus="{campus}" incremental="true">
