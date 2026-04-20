@@ -120,9 +120,10 @@ def post_xml_file(snapshot_filename: str):
         "-k",
         "--silent",
         "--show-error",
-        "-X", "POST",
-        "-H", "Content-Type: application/zip",
-        "--data-binary", f"@{snapshot_filename}",
+        # "-X", "POST",
+        # "-H", "Content-Type: application/zip",
+        # "--data-binary", f"@{snapshot_filename}",
+        "-F", f"file=@{snapshot_filename};type=application/zip",
         "-w", f"\\n{status_marker}%{{http_code}}\\n",
         f"{DATA_EXCHANGE_ENDPOINT}?token={UNITIME_TOKEN}"
     ]

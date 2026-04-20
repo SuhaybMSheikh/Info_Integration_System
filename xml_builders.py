@@ -19,18 +19,51 @@ def format_date(d: str) -> str:
     return datetime.strptime(d, "%d/%m/%Y").strftime("%Y-%m-%d")
 
 # Time Patterns
-def build_time_pattern_xml(name, start_times_hhmm):
+import re
+
+def parse_minutes_from_name(name: str, default: int = 120) -> int:
+    """
+    Parses the time pattern name for duration in hours and minutes.
+    Examples:
+      'Auto 1 H' -> 60
+      'Auto 2 H 30 M' -> 150
+      'Auto 2 H 15 M' -> 135
+      'Auto 3 H' -> 180
+    Returns default if not found.
+    """
+    pattern = r"(\d+)\s*H(?:\s*(\d+)\s*M)?"
+    match = re.search(pattern, name, re.IGNORECASE)
+    if match:
+        hours = int(match.group(1))
+        minutes = int(match.group(2)) if match.group(2) else 0
+        return hours * 60 + minutes
+    # Try just minutes
+    pattern_min = r"(\d+)\s*M"
+    match_min = re.search(pattern_min, name, re.IGNORECASE)
+    if match_min:
+        return int(match_min.group(1))
+    return default
+
+def build_time_pattern_xml(name, start_times_hhmm, nbr_meetings=1, mins_per_meeting=None):
+    day_codes = ["M", "T", "W", "Th", "F"]
+    days_xml = "".join([f'<days code="{d}"/>' for d in day_codes])
+
+    if mins_per_meeting is None:
+        mins_per_meeting = parse_minutes_from_name(name)
+
     """Returns a single time pattern block."""
     times_xml = "".join(
         f'<time start="{t}"/>' for t in start_times_hhmm
     )
     return f"""
-  <timePattern>
-    <name>{xml_escape(name)}</name>
-    <times>
+    <timePattern name="{xml_escape(name)}" 
+                 nbrMeetings="{nbr_meetings}" 
+                 minsPerMeeting="{mins_per_meeting}" 
+                 type="Standard" 
+                 visible="true">
+      {days_xml}
       {times_xml}
-    </times>
-  </timePattern>"""
+    </timePattern>"""
 
 # Main XML Builder
 def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existing_courses, existing_classes):
@@ -167,9 +200,9 @@ def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existi
 def build_session_xml():
     year, term = EXPECTED_ACADEMIC_SESSION.split()
     return f"""
-  <unitime type="base" term="{term}" year="{year}" campus="APU" incremental="true">
+  <academicSessionSetup type="base" term="{term}" year="{year}" campus="APU" incremental="true">
     <!-- Leave empty or add a comment -->
-</unitime>
+</academicSessionSetup>
 """
 
 def build_curricula_xml(records):
@@ -230,14 +263,17 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
 
     # 1. Build Session XML
     session_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<unitime type="base" term="{term}" year="{year}" campus="{campus}" incremental="true">
-</unitime>"""
+<sessionSetup term="{term}" year="{year}" campus="{campus}" incremental="true">
+    <!-- Inner data goes here if needed -->
+</sessionSetup>"""
 
     tp_blocks = "".join([build_time_pattern_xml(name, starts) for name, starts in time_patterns.items()])
     time_patterns_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<timePatterns term="{term}" year="{year}" campus="{campus}">
-{tp_blocks}
-</timePatterns>"""
+<sessionSetup term="{term}" year="{year}" campus="{campus}" incremental="true">
+    <timePatterns>
+    {tp_blocks}
+    </timePatterns>
+</sessionSetup>"""
 
     # 2. Build Staff (Instructor) XML
     staff_entries = {}
@@ -324,11 +360,11 @@ def create_unitime_zip_package(output_zip_path, session_xml, time_patterns_xml, 
     try:
         with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as unitime_zip:
             # Writing each individual XML string into its own file inside the zip
-            unitime_zip.writestr("1. session.xml", session_xml)
-            unitime_zip.writestr("2. time_patterns.xml", time_patterns_xml)
-            unitime_zip.writestr("3. staff.xml", staff_xml)
-            unitime_zip.writestr("4. curricula.xml", curricula_xml)
-            unitime_zip.writestr("5. offerings.xml", offerings_xml)
+            unitime_zip.writestr("01_session.xml", session_xml)
+            unitime_zip.writestr("02_time_patterns.xml", time_patterns_xml)
+            unitime_zip.writestr("03_staff.xml", staff_xml)
+            unitime_zip.writestr("04_curricula.xml", curricula_xml)
+            unitime_zip.writestr("05_offerings.xml", offerings_xml)
             
         print(f"Successfully created: {output_zip_path}")
         return output_zip_path
