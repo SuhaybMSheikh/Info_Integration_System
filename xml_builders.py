@@ -1,7 +1,8 @@
 from datetime import datetime
 import zipfile
-import os
 from config import EXPECTED_ACADEMIC_SESSION
+import re
+from collections import defaultdict
 
 def xml_escape(s: str) -> str:
     if s is None:
@@ -17,9 +18,6 @@ def xml_escape(s: str) -> str:
 
 def format_date(d: str) -> str:
     return datetime.strptime(d, "%d/%m/%Y").strftime("%Y-%m-%d")
-
-# Time Patterns
-import re
 
 def parse_minutes_from_name(name: str, default: int = 120) -> int:
     """
@@ -206,48 +204,61 @@ def build_session_xml():
 """
 
 def build_curricula_xml(records):
-    # Deduplicate projections: a curriculum (intake) may appear across multiple
-    # class records for the same course; UniTime expects one projection per
-    # (intake_code, subject, courseNumber).
-    curricula = {}
-    area_map = {}
+    curricula = defaultdict(list)
     year, term = EXPECTED_ACADEMIC_SESSION.split()
+    campus = "APU"
 
+    # Group records by intake_code (major)
     for r in records:
         intakes = r.get("intakes") or []
-        if not intakes:
-            continue
-
-        subject = r["subject_area"]
-        course = r["course_number"]
-        # get area_abbreviation from record, fallback to None
-        area_abbreviation = r.get("area_abbreviation")
-
         for intake in intakes:
             intake_code = intake["code"]
-            students = intake.get("students", 0) or 0
-
-            by_course = curricula.setdefault(intake_code, {})
-            by_course[(subject, course)] = by_course.get((subject, course), 0) + students
-            # Save area_abbreviation for this intake_code if present
-            if area_abbreviation:
-                area_map[intake_code] = area_abbreviation
+            curricula[intake_code].append(r)
 
     xml_blocks = []
+    for intake_code, group_records in curricula.items():
+        # Build classifications
+        classifications = defaultdict(set)  # {classification_code: set of (subject, courseNbr, department)}
+        for r in group_records:
+            type_and_number = r.get("type_and_number") or ""
+            match = re.search(r"L-(\d+)", str(type_and_number))
+            if match:
+                group_num = match.group(1)
+                class_code = f"G{group_num}"
+            else:
+                class_code = "G1"  # Default if not found
+            # Extract courseNbr and subject from course_number/module_code
+            course_code = r.get("course_number") or r.get("module_code") or ""
+            parts = course_code.split("-")
+            if len(parts) >= 2:
+                course_nbr = parts[0]
+                subject = parts[-1]
+            else:
+                course_nbr = course_code
+                subject = course_code
+            department = subject  # Department must match subject
+            classifications[class_code].add((subject, course_nbr, department))
 
-    for intake_code, projections_map in curricula.items():
-        projections_xml = ""
+        # Build <classifications> XML
+        classifications_xml = ""
+        for class_code, courses in sorted(classifications.items()):
+            for subject, course_nbr, department in sorted(courses):
+                classifications_xml += (
+                    f'<classification>'
+                    f'<academicClassification code="{xml_escape(class_code)}"/>'
+                    f'<course subject="{xml_escape(subject)}" courseNbr="{xml_escape(course_nbr)}" department="{xml_escape(department)}"/>'
+                    f'</classification>'
+                )
 
-        for (subject, course), students in projections_map.items():
-            projections_xml += f'<courseProjection subject="{xml_escape(subject)}" courseNumber="{xml_escape(course)}" students="{students}"/>'
+        xml_blocks.append(
+            f'<curriculum>'
+            f'<academicArea abbreviation="Deg"/>'
+            f'<major code="{xml_escape(intake_code)}"/>'
+            f'<classifications>{classifications_xml}</classifications>'
+            f'</curriculum>'
+        )
 
-        # Get area_abbreviation for this intake_code, default to 'Deg'
-        area_abbr = area_map.get(intake_code, "Deg")
-        xml_blocks.append(f'<curriculum academicArea="{xml_escape(area_abbr)}" abbreviation="{xml_escape(intake_code)}" name="{xml_escape(intake_code)}">'
-                         f'<courseProjections>{projections_xml}</courseProjections>'
-                         f'</curriculum>')
-
-    return f'<curricula campus="APU" term="{term}" year="{year}">' + ''.join(xml_blocks) + '</curricula>'
+    return f'<curricula campus="{xml_escape(campus)}" term="{xml_escape(term)}" year="{xml_escape(year)}">' + ''.join(xml_blocks) + '</curricula>'
 
 def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existing_courses, existing_classes, output_path=None):
     year, term = EXPECTED_ACADEMIC_SESSION.split()
