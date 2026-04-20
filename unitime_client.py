@@ -3,12 +3,36 @@ import subprocess
 from datetime import datetime
 from config import USERNAME, PASSWORD, DATA_EXCHANGE_ENDPOINT, UNITIME_BASE_URL, UNITIME_TOKEN
 import logging
+import json
+import os
+import time
 
 logging.basicConfig(
     filename="integration.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+# #region agent log
+_DEBUG_LOG_PATH = "debug-583fc7.log"
+_DEBUG_SESSION_ID = "583fc7"
+
+def _debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: dict):
+    try:
+        payload = {
+            "sessionId": _DEBUG_SESSION_ID,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 def post_xml(xml_data: str):
     headers = {
@@ -69,6 +93,27 @@ def post_xml_file(snapshot_filename: str):
     print(f"File: {snapshot_filename}")
     print(f"Endpoint: {DATA_EXCHANGE_ENDPOINT}")
 
+    # #region agent log
+    try:
+        file_size = os.path.getsize(snapshot_filename)
+    except Exception:
+        file_size = None
+    token_len = len(UNITIME_TOKEN) if isinstance(UNITIME_TOKEN, str) else None
+    _debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H1",
+        location="unitime_client.py:post_xml_file",
+        message="Preparing UniTime ZIP upload",
+        data={
+            "endpoint": DATA_EXCHANGE_ENDPOINT,
+            "token_is_set": bool(UNITIME_TOKEN),
+            "token_len": token_len,
+            "file": snapshot_filename,
+            "file_size_bytes": file_size,
+        },
+    )
+    # #endregion
+
     status_marker = "__CURL_HTTP_STATUS__:"
     curl_command = [
         "curl",
@@ -76,8 +121,8 @@ def post_xml_file(snapshot_filename: str):
         "--silent",
         "--show-error",
         "-X", "POST",
-        "-H", "Content-Type: application/xml;charset=UTF-8",
-        "-d", f"@{snapshot_filename}",
+        "-H", "Content-Type: application/zip",
+        "--data-binary", f"@{snapshot_filename}",
         "-w", f"\\n{status_marker}%{{http_code}}\\n",
         f"{DATA_EXCHANGE_ENDPOINT}?token={UNITIME_TOKEN}"
     ]
@@ -102,6 +147,22 @@ def post_xml_file(snapshot_filename: str):
             status_str = status_part.strip().splitlines()[0] if status_part.strip() else ""
             if status_str.isdigit():
                 http_status = int(status_str)
+
+        # #region agent log
+        _debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H2",
+            location="unitime_client.py:post_xml_file",
+            message="UniTime response received",
+            data={
+                "curl_exit_code": result.returncode,
+                "http_status": http_status,
+                "stdout_len": len(result.stdout or ""),
+                "stderr_len": len(result.stderr or ""),
+                "body_prefix": (body or "")[:200],
+            },
+        )
+        # #endregion
 
         # Save full response to log file
         with open(log_filename, "w", encoding="utf-8") as f:

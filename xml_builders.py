@@ -224,7 +224,7 @@ def build_curricula_xml(records):
 </curricula>
 """
 
-def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existing_courses, existing_classes, output_path="unitime_import.zip"):
+def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existing_courses, existing_classes, output_path=None):
     year, term = EXPECTED_ACADEMIC_SESSION.split()
     campus = "APU"
 
@@ -293,8 +293,29 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
 {offerings_body}
 </offerings>"""
 
-    # Create the Zip
-    return create_unitime_zip_package(output_path, session_xml, time_patterns_xml, staff_xml, curricula_xml, offerings_xml)
+    if not output_path:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"xml_snapshot_{timestamp}.zip"
+
+    zip_path = create_unitime_zip_package(
+        output_path,
+        session_xml,
+        time_patterns_xml,
+        staff_xml,
+        curricula_xml,
+        offerings_xml,
+    )
+
+    return {
+        "zip_path": zip_path,
+        "sections": {
+            "session": session_xml,
+            "time_patterns": time_patterns_xml,
+            "staff": staff_xml,
+            "curricula": curricula_xml,
+            "offerings": offerings_xml,
+        },
+    }
 
 def create_unitime_zip_package(output_zip_path, session_xml, time_patterns_xml, staff_xml, curricula_xml, offerings_xml):
     """
@@ -310,7 +331,7 @@ def create_unitime_zip_package(output_zip_path, session_xml, time_patterns_xml, 
             unitime_zip.writestr("5. offerings.xml", offerings_xml)
             
         print(f"Successfully created: {output_zip_path}")
-        return True
+        return output_zip_path
     except Exception as e:
       print(f"Error creating zip: {e}")
-      return False
+      return None

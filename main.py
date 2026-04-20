@@ -137,7 +137,7 @@ def main():
     from json_to_xml_mapper import records_to_xml
 
 
-    xml = records_to_xml(
+    result = records_to_xml(
         grouped_records,
         filtered_records,
         time_pattern_starts,
@@ -145,16 +145,20 @@ def main():
         existing_classes
     )
 
-    # Print the generated XML to the console
-    print("=== XML OUTPUT ===\n" + xml)
+    sections = (result or {}).get("sections", {})
+    zip_path = (result or {}).get("zip_path")
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    snapshot_filename = f"xml_snapshot_{timestamp}.xml"
+    # Print the generated XML sections to the console
+    print("=== XML OUTPUT: SESSION ===\n" + (sections.get("session") or ""))
+    print("=== XML OUTPUT: CURRICULA ===\n" + (sections.get("curricula") or ""))
+    print("=== XML OUTPUT: TIME PATTERNS ===\n" + (sections.get("time_patterns") or ""))
+    print("=== XML OUTPUT: STAFF ===\n" + (sections.get("staff") or ""))
+    print("=== XML OUTPUT: OFFERINGS ===\n" + (sections.get("offerings") or ""))
 
-    with open(snapshot_filename, "w", encoding="utf-8") as f:
-        f.write(xml)
-
-    print(f"XML snapshot saved to: {snapshot_filename}")
+    if zip_path:
+        print(f"XML ZIP snapshot saved to: {zip_path}")
+    else:
+        print("Failed to generate XML ZIP snapshot.")
 
     # === XML Export (Manual Import Mode) ===
 
@@ -171,6 +175,9 @@ def main():
     # === UniTime API Push ===
 
     if not DRY_RUN:
+        if not zip_path:
+            print("Push aborted: ZIP snapshot was not generated.")
+            sys.exit(1)
     
         confirm = input(
             "\n You are about to push data to UniTime.\n"
@@ -182,7 +189,7 @@ def main():
             sys.exit(0)
     
         try:
-            post_xml_file(snapshot_filename)
+            post_xml_file(zip_path)
         except Exception as e:
             print("\n IMPORT FAILED")
             print(str(e))
