@@ -210,6 +210,7 @@ def build_curricula_xml(records):
     # class records for the same course; UniTime expects one projection per
     # (intake_code, subject, courseNumber).
     curricula = {}
+    area_map = {}
     year, term = EXPECTED_ACADEMIC_SESSION.split()
 
     for r in records:
@@ -219,6 +220,8 @@ def build_curricula_xml(records):
 
         subject = r["subject_area"]
         course = r["course_number"]
+        # get area_abbreviation from record, fallback to None
+        area_abbreviation = r.get("area_abbreviation")
 
         for intake in intakes:
             intake_code = intake["code"]
@@ -226,6 +229,9 @@ def build_curricula_xml(records):
 
             by_course = curricula.setdefault(intake_code, {})
             by_course[(subject, course)] = by_course.get((subject, course), 0) + students
+            # Save area_abbreviation for this intake_code if present
+            if area_abbreviation:
+                area_map[intake_code] = area_abbreviation
 
     xml_blocks = []
 
@@ -233,29 +239,15 @@ def build_curricula_xml(records):
         projections_xml = ""
 
         for (subject, course), students in projections_map.items():
-            projections_xml += f"""
-        <courseProjection>
-          <subject>{xml_escape(subject)}</subject>
-          <courseNumber>{xml_escape(course)}</courseNumber>
-          <students>{students}</students>
-        </courseProjection>
-"""
+            projections_xml += f'<courseProjection subject="{xml_escape(subject)}" courseNumber="{xml_escape(course)}" students="{students}"/>'
 
-        xml_blocks.append(f"""
-  <curriculum>
-    <abbreviation>{xml_escape(intake_code)}</abbreviation>
-    <name>{xml_escape(intake_code)}</name>
-    <courseProjections>
-      {projections_xml}
-    </courseProjections>
-  </curriculum>
-""")
+        # Get area_abbreviation for this intake_code, default to 'Deg'
+        area_abbr = area_map.get(intake_code, "Deg")
+        xml_blocks.append(f'<curriculum academicArea="{xml_escape(area_abbr)}" abbreviation="{xml_escape(intake_code)}" name="{xml_escape(intake_code)}">'
+                         f'<courseProjections>{projections_xml}</courseProjections>'
+                         f'</curriculum>')
 
-    return f"""
-<curricula term="{term}" year="{year}" campus="APU">
-  {''.join(xml_blocks)}
-</curricula>
-"""
+    return f'<curricula campus="APU" term="{term}" year="{year}">' + ''.join(xml_blocks) + '</curricula>'
 
 def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existing_courses, existing_classes, output_path=None):
     year, term = EXPECTED_ACADEMIC_SESSION.split()
@@ -279,8 +271,19 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
     staff_entries = {}
     for group in grouped_records:
         for r in group["classes"]:
-            staff_entries[r["lecturer_code"]] = f'<employee externalId="{xml_escape(r["lecturer_code"])}" firstName="{xml_escape(r["lecturer_name"])}" lastName=""/>'
-    
+            code = str(r["lecturer_code"]).strip()
+            name = str(r["lecturer_name"]).strip()
+            if code.upper() == "TBA" or name.upper() == "TBA":
+                continue
+            if "." in name:
+                first, last = name.split(".", 1)
+                first = first.strip()
+                last = last.strip()
+            else:
+                first = name
+                last = name
+            staff_entries[code] = f'<employee externalId="{xml_escape(code)}" firstName="{xml_escape(first)}" lastName="{xml_escape(last)}"/>'
+
     staff_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <staff term="{term}" year="{year}" campus="{campus}">
 {"".join(staff_entries.values())}
