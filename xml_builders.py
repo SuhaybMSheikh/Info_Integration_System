@@ -64,136 +64,136 @@ def build_time_pattern_xml(name, start_times_hhmm, nbr_meetings=1, mins_per_meet
     </timePattern>"""
 
 # Main XML Builder
-def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existing_courses, existing_classes):
-    instructors = {}
-    offerings_xml = ""
-    time_pattern_xml_blocks = []
-    year, term = EXPECTED_ACADEMIC_SESSION.split()
-
-    # Time Patterns
-    for tp_name, starts in time_patterns.items():
-        time_pattern_xml_blocks.append(
-            build_time_pattern_xml(tp_name, starts)
-        )
-
-    # Instructional Offerings (Grouped)
-    for group in grouped_records:
-        subject_area = group["subject_area"]
-        course_number = group["course_number"]
-        classes = group["classes"]
-
-        course_key = (subject_area, course_number)
-
-        existing_course = existing_courses.get(course_key)
-        config_name = "Default Config"
-
-        config_action = "insert"
-
-        if existing_course:
-            if existing_course and config_name in existing_course.get("configurations", {}):
-                config_action = "update"
-
-        # Build class XML blocks
-        class_blocks = ""
-
-        for r in classes:
-
-            # Register instructor (unique)
-            instructors[r["lecturer_code"]] = f"""
-<instructor>
-  <externalId>{xml_escape(r["lecturer_code"])}</externalId>
-  <name>{xml_escape(r["lecturer_name"])}</name>
-</instructor>
-"""
-
-            external_id = r["class_code"]
-
-            existing = existing_classes.get(external_id)
-
-            action = "insert"
-
-            if existing:
-                # Compare fields
-                if (
-                        existing["limit"] != r["total_students"] or
-                        existing["instructor"] != r["lecturer_code"] or
-                        existing["weeks"] != r["duration_weeks"] or
-                        existing["timePattern"] != r["time_pattern_name"]
-                ):
-                    action = "update"
-                else:
-                    print(f"Class unchanged: {external_id}")
-                    continue  # Skip identical class
-
-            class_blocks += f"""
-            <class action="{action}">
-              <externalId>{xml_escape(external_id)}</externalId>
-              <instructionalType>{xml_escape(r["instructional_type"])}</instructionalType>
-              <limit>{r["total_students"]}</limit>
-              <weeks>{r["duration_weeks"]}</weeks>
-              <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
-              <staff term="{term}" year="{year}" campus="APU">
-                <employee externalId="{xml_escape(r["lecturer_code"])}"/>
-              </staff>
-            </class>
-            """
-
-        if not class_blocks.strip():
-            continue
-
-        # Determine offering action
-        offering_action = "insert"
-        if course_key in existing_courses:
-            offering_action = "update"
-
-        offerings_xml += f"""
-        <instructionalOffering action="{offering_action}">
-          <subject>{xml_escape(subject_area)}</subject>
-          <courseNumber>{xml_escape(course_number)}</courseNumber>
-
-          <configurations>
-            <configuration action="{config_action}">
-              <name>{config_name}</name>
-              <classes>
-                {class_blocks}
-              </classes>
-            </configuration>
-          </configurations>
-
-        </instructionalOffering>
-        """
-
-        if offering_action == "update":
-            print(f"Updating existing course: {course_number}")
-        else:
-            print(f"Creating new course: {course_number}")
-
-    # Assemble XML
-    instructors_xml = "".join(instructors.values())
-    session_xml = build_session_xml()
-    curricula_xml = build_curricula_xml(flat_records)
-
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<dataExchange>
-
-{session_xml}
-
-{curricula_xml}
-
-<timePatterns>
-  {''.join(time_pattern_xml_blocks)}
-</timePatterns>
-
-<instructors>
-  {instructors_xml}
-</instructors>
-
-<offerings term="{term}" year="{year}" campus="APU" incremental="true">
-  {offerings_xml}
-</offerings>
-
-</dataExchange>
-"""
+# def build_data_exchange_xml(grouped_records, flat_records, time_patterns, existing_courses, existing_classes):
+#     instructors = {}
+#     offerings_xml = ""
+#     time_pattern_xml_blocks = []
+#     year, term = EXPECTED_ACADEMIC_SESSION.split()
+#
+#     # Time Patterns
+#     for tp_name, starts in time_patterns.items():
+#         time_pattern_xml_blocks.append(
+#             build_time_pattern_xml(tp_name, starts)
+#         )
+#
+#     # Instructional Offerings (Grouped)
+#     for group in grouped_records:
+#         subject_area = group["subject_area"]
+#         course_number = group["course_number"]
+#         classes = group["classes"]
+#
+#         course_key = (subject_area, course_number)
+#
+#         existing_course = existing_courses.get(course_key)
+#         config_name = "Default Config"
+#
+#         config_action = "insert"
+#
+#         if existing_course:
+#             if existing_course and config_name in existing_course.get("configurations", {}):
+#                 config_action = "update"
+#
+#         # Build class XML blocks
+#         class_blocks = ""
+#
+#         for r in classes:
+#
+#             # Register instructor (unique)
+#             instructors[r["lecturer_code"]] = f"""
+# <instructor>
+#   <externalId>{xml_escape(r["lecturer_code"])}</externalId>
+#   <name>{xml_escape(r["lecturer_name"])}</name>
+# </instructor>
+# """
+#
+#             external_id = r["class_code"]
+#
+#             existing = existing_classes.get(external_id)
+#
+#             action = "insert"
+#
+#             if existing:
+#                 # Compare fields
+#                 if (
+#                         existing["limit"] != r["total_students"] or
+#                         existing["instructor"] != r["lecturer_code"] or
+#                         existing["weeks"] != r["duration_weeks"] or
+#                         existing["timePattern"] != r["time_pattern_name"]
+#                 ):
+#                     action = "update"
+#                 else:
+#                     print(f"Class unchanged: {external_id}")
+#                     continue  # Skip identical class
+#
+#             class_blocks += f"""
+#             <class action="{action}">
+#               <externalId>{xml_escape(external_id)}</externalId>
+#               <instructionalType>{xml_escape(r["instructional_type"])}</instructionalType>
+#               <limit>{r["total_students"]}</limit>
+#               <weeks>{r["duration_weeks"]}</weeks>
+#               <timePattern>{xml_escape(r["time_pattern_name"])}</timePattern>
+#               <staff term="{term}" year="{year}" campus="APU">
+#                 <employee externalId="{xml_escape(r["lecturer_code"])}"/>
+#               </staff>
+#             </class>
+#             """
+#
+#         if not class_blocks.strip():
+#             continue
+#
+#         # Determine offering action
+#         offering_action = "insert"
+#         if course_key in existing_courses:
+#             offering_action = "update"
+#
+#         offerings_xml += f"""
+#         <instructionalOffering action="{offering_action}">
+#           <subject>{xml_escape(subject_area)}</subject>
+#           <courseNumber>{xml_escape(course_number)}</courseNumber>
+#
+#           <configurations>
+#             <configuration action="{config_action}">
+#               <name>{config_name}</name>
+#               <classes>
+#                 {class_blocks}
+#               </classes>
+#             </configuration>
+#           </configurations>
+#
+#         </instructionalOffering>
+#         """
+#
+#         if offering_action == "update":
+#             print(f"Updating existing course: {course_number}")
+#         else:
+#             print(f"Creating new course: {course_number}")
+#
+#     # Assemble XML
+#     instructors_xml = "".join(instructors.values())
+#     session_xml = build_session_xml()
+#     curricula_xml = build_curricula_xml(flat_records)
+#
+#     return f"""<?xml version="1.0" encoding="UTF-8"?>
+# <dataExchange>
+#
+# {session_xml}
+#
+# {curricula_xml}
+#
+# <timePatterns>
+#   {''.join(time_pattern_xml_blocks)}
+# </timePatterns>
+#
+# <instructors>
+#   {instructors_xml}
+# </instructors>
+#
+# <offerings term="{term}" year="{year}" campus="APU" incremental="true">
+#   {offerings_xml}
+# </offerings>
+#
+# </dataExchange>
+# """
 
 def build_session_xml():
     year, term = EXPECTED_ACADEMIC_SESSION.split()
@@ -217,8 +217,18 @@ def build_curricula_xml(records):
 
     xml_blocks = []
     for intake_code, group_records in curricula.items():
-        # Build classifications
-        classifications = defaultdict(set)  # {classification_code: set of (subject, courseNbr, department)}
+        # Find department (first subject_raw before '___', fallback to 'UNK')
+        dept = None
+        for r in group_records:
+            subject_raw = r.get("subject_raw", "")
+            if subject_raw:
+                dept = subject_raw.split("___")[0]
+                break
+        if not dept:
+            dept = "UNK"
+
+        # Build classifications: {classification_code: set of (subject, courseNbr)}, and sum enrollment
+        classifications = defaultdict(lambda: {"courses": set(), "enrollment": 0})
         for r in group_records:
             type_and_number = r.get("type_and_number") or ""
             match = re.search(r"L-(\d+)", str(type_and_number))
@@ -236,25 +246,31 @@ def build_curricula_xml(records):
             else:
                 course_nbr = course_code
                 subject = course_code
-            department = subject  # Department must match subject
-            classifications[class_code].add((subject, course_nbr, department))
+            classifications[class_code]["courses"].add((subject, course_nbr))
+            # Add enrollment (number of students in this record)
+            try:
+                n_students = int(r.get("total_students", 0))
+            except Exception:
+                n_students = 0
+            classifications[class_code]["enrollment"] += n_students
 
-        # Build <classifications> XML
-        classifications_xml = ""
-        for class_code, courses in sorted(classifications.items()):
-            for subject, course_nbr, department in sorted(courses):
-                classifications_xml += (
-                    f'<classification>'
-                    f'<academicClassification code="{xml_escape(class_code)}"/>'
-                    f'<course subject="{xml_escape(subject)}" courseNbr="{xml_escape(course_nbr)}" department="{xml_escape(department)}"/>'
-                    f'</classification>'
-                )
+        # Build <classification> blocks (no <classifications> wrapper)
+        classification_blocks = ""
+        for class_code, data in sorted(classifications.items()):
+            enrollment = data["enrollment"]
+            courses = data["courses"]
+            classification_blocks += f'<classification enrollment="{enrollment}">' 
+            classification_blocks += f'<academicClassification code="{xml_escape(class_code)}"/>'
+            for subject, course_nbr in sorted(courses):
+                classification_blocks += f'<course subject="{xml_escape(subject)}" courseNbr="{xml_escape(course_nbr)}"/>'
+            classification_blocks += f'</classification>'
 
         xml_blocks.append(
             f'<curriculum>'
             f'<academicArea abbreviation="Deg"/>'
+            f'<department code="{xml_escape(dept)}"/>'
             f'<major code="{xml_escape(intake_code)}"/>'
-            f'<classifications>{classifications_xml}</classifications>'
+            f'{classification_blocks}'
             f'</curriculum>'
         )
 
