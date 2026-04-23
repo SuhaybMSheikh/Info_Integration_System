@@ -323,36 +323,51 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
 {curricula_content}"""
 
     # 4. Build Offerings XML
-
     offerings_body = ""
     for group in grouped_records:
         subject_area = group["subject_area"]
         course_number = group["course_number"]
         course_key = (subject_area, course_number)
 
-        class_blocks = ""
+        # Group classes by instructional type (Lec, Lab, etc.)
+        subparts_dict = defaultdict(list)
+        total_limit = 0
         for r in group["classes"]:
-            action = "update" if existing_classes.get(r["class_code"]) else "insert"
+            instr_type = r.get("instructional_type", "Lec")
+            subparts_dict[instr_type].append(r)
+            try:
+                total_limit += int(r.get("total_students", 0))
+            except Exception:
+                pass
 
-            class_blocks += f"""
-            <class action="{action}" type="{xml_escape(r["instructional_type"])}" limit="{r["total_students"]}" externalId="{xml_escape(r["class_code"])}">
-              <weeks>{r["duration_weeks"]}</weeks>
-              <timePattern>{xml_escape(r["time_pattern_name"])} </timePattern>
-              <instructor externalId="{xml_escape(r["lecturer_code"])}" responsibility="Teaching"/>
-            </class>"""
-
-        if not class_blocks.strip():
+        if not subparts_dict:
             continue
 
+        # Build subparts
+        subparts_xml = ""
+        for instr_type, classes in sorted(subparts_dict.items()):
+            # Calculate minPerWeek from time pattern (e.g., "Auto 2 H 30 M" -> 150)
+            min_per_week = 120  # default
+            if classes:
+                first_class = classes[0]
+                time_pattern_name = first_class.get("time_pattern_name", "")
+                min_per_week = parse_minutes_from_name(time_pattern_name)
+
+            # Build classes for this subpart
+            class_xml_list = ""
+            for r in classes:
+                class_xml_list += f'<class externalId="{xml_escape(r["class_code"])}" limit="{r["total_students"]}"><instructor externalId="{xml_escape(r["lecturer_code"])}" responsibility="Teaching"/></class>'
+
+            subparts_xml += f'<subpart type="{xml_escape(instr_type)}" minPerWeek="{min_per_week}">{class_xml_list}</subpart>'
+
         off_action = "update" if course_key in existing_courses else "insert"
+        offering_id = course_number  # Use course_number as the ID
         offerings_body += f"""
-        <offering action="{off_action}">
+        <offering id="{xml_escape(offering_id)}" action="{off_action}">
           <course subject="{xml_escape(subject_area)}" courseNbr="{xml_escape(course_number)}" controlling="true"/>
-          <configurations>
-            <configuration action="insert" name="Default Config">
-              <classes>{class_blocks}</classes>
-            </configuration>
-          </configurations>
+          <config name="Default Config" limit="{total_limit}">
+            {subparts_xml}
+          </config>
         </offering>"""
 
     offerings_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -394,8 +409,9 @@ def create_unitime_zip_package(output_zip_path, session_xml, time_patterns_xml, 
             unitime_zip.writestr("01_session.xml", session_xml)
             unitime_zip.writestr("02_time_patterns.xml", time_patterns_xml)
             unitime_zip.writestr("03_staff.xml", staff_xml)
-            unitime_zip.writestr("04_curricula.xml", curricula_xml)
-            unitime_zip.writestr("05_offerings.xml", offerings_xml)
+            unitime_zip.writestr("04_offerings.xml", offerings_xml)
+            unitime_zip.writestr("05_curricula.xml", curricula_xml)
+
             
         print(f"Successfully created: {output_zip_path}")
         return output_zip_path
