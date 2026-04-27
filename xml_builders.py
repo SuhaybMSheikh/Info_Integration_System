@@ -198,7 +198,7 @@ def build_time_pattern_xml(name, start_times_hhmm, nbr_meetings=1, mins_per_meet
 def build_session_xml():
     year, term = EXPECTED_ACADEMIC_SESSION.split()
     return f"""
-  <academicSessionSetup type="base" term="{term}" year="{year}" campus="APU" incremental="true">
+  <academicSessionSetup type="base" term="{term}" year="{year}" campus="{year}" incremental="true">
     <!-- Leave empty or add a comment -->
 </academicSessionSetup>
 """
@@ -206,7 +206,7 @@ def build_session_xml():
 def build_curricula_xml(records):
     curricula = defaultdict(list)
     year, term = EXPECTED_ACADEMIC_SESSION.split()
-    campus = "APU"
+    campus = year
 
     # Group records by intake_code (major)
     for r in records:
@@ -278,7 +278,7 @@ def build_curricula_xml(records):
 
 def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existing_courses, existing_classes, output_path=None):
     year, term = EXPECTED_ACADEMIC_SESSION.split()
-    campus = "APU"
+    campus = year
 
     # 1. Build Session XML
     session_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -356,7 +356,7 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
             # Build classes for this subpart
             class_xml_list = ""
             for r in classes:
-                class_xml_list += f'<class externalId="{xml_escape(r["class_code"])}" limit="{r["total_students"]}"><instructor externalId="{xml_escape(r["lecturer_code"])}" responsibility="Teaching"/></class>'
+                class_xml_list += f'<class id="{xml_escape(r["class_code"])}" type="{xml_escape(instr_type)}" limit="{r["total_students"]}"><instructor id="{xml_escape(r["lecturer_code"])}" share="1.0" lead="true"/></class>'
 
             subparts_xml += f'<subpart type="{xml_escape(instr_type)}" minPerWeek="{min_per_week}">{class_xml_list}</subpart>'
 
@@ -364,13 +364,14 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
         offering_id = course_number  # Use course_number as the ID
         offerings_body += f"""
         <offering id="{xml_escape(offering_id)}" action="{off_action}">
-          <course subject="{xml_escape(subject_area)}" courseNbr="{xml_escape(course_number)}" controlling="true"/>
+          <course subject="{xml_escape(subject_area)}" courseNbr="{xml_escape(course_number)}" controlling="true" title=""/>
           <config name="Default Config" limit="{total_limit}">
             {subparts_xml}
           </config>
         </offering>"""
 
-    offerings_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    offerings_xml = f"""<!DOCTYPE offerings PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://unitime.org">
+<?xml version="1.0" encoding="UTF-8"?>
 <offerings term="{term}" year="{year}" campus="{campus}" incremental="true">
 {offerings_body}
 </offerings>"""
