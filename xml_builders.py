@@ -3,6 +3,7 @@ import zipfile
 from config import EXPECTED_ACADEMIC_SESSION
 import re
 from collections import defaultdict
+import xml.etree.ElementTree as ET
 
 def xml_escape(s: str) -> str:
     if s is None:
@@ -41,6 +42,44 @@ def parse_minutes_from_name(name: str, default: int = 120) -> int:
     if match_min:
         return int(match_min.group(1))
     return default
+
+def class_suffix(record: dict) -> str:
+    """
+    UniTime requires a class suffix in course offering imports. Prefer the
+    group number from type_and_number, falling back to the class_code tail.
+    """
+    type_and_number = str(record.get("type_and_number") or "")
+    match = re.search(r"(?:^|-)(\d+[A-Za-z]*)$", type_and_number)
+    if match:
+        return match.group(1)
+
+    class_code = str(record.get("class_code") or "")
+    if "___" in class_code:
+        class_part = class_code.split("___")[1]
+        match = re.search(r"-(\d+[A-Za-z]*)$", class_part)
+        if match:
+            return match.group(1)
+
+    return "1"
+
+def validate_offerings_xml(xml_text: str):
+    root = ET.fromstring(xml_text)
+    if root.tag != "offerings":
+        raise ValueError("Offerings XML root must be <offerings>.")
+
+    for offering in root.findall("offering"):
+        if not offering.get("offered"):
+            raise ValueError(f"Offering {offering.get('id')} is missing required offered attribute.")
+
+        for cls in offering.findall(".//class"):
+            if not cls.get("suffix"):
+                raise ValueError(f"Class {cls.get('id')} is missing required suffix attribute.")
+
+        for subpart in offering.findall(".//subpart"):
+            if subpart.findall("class"):
+                raise ValueError(
+                    f"Offering {offering.get('id')} has class elements nested inside subpart elements."
+                )
 
 def build_time_pattern_xml(name, start_times_hhmm, nbr_meetings=1, mins_per_meeting=None):
     day_codes = ["M", "T", "W", "Th", "F"]
@@ -220,7 +259,7 @@ def build_curricula_xml(records):
         # Find department (first subject_raw before '___', fallback to 'UNK')
         dept = None
         for r in group_records:
-            subject_raw = r.get("subject_raw", "")
+            subject_raw = r.get("class_code", "")
             if subject_raw:
                 dept = subject_raw.split("___")[0]
                 break
@@ -282,12 +321,14 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
 
     # 1. Build Session XML
     session_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE sessionSetup PUBLIC "-//UniTime//UniTime Academic Session Setup/EN" "http://www.unitime.org/interface/AcademicSessionSetup.dtd">
 <sessionSetup term="{term}" year="{year}" campus="{campus}" incremental="true">
     <!-- Inner data goes here if needed -->
 </sessionSetup>"""
 
     tp_blocks = "".join([build_time_pattern_xml(name, starts) for name, starts in time_patterns.items()])
     time_patterns_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE sessionSetup PUBLIC "-//UniTime//UniTime Academic Session Setup/EN" "http://www.unitime.org/interface/AcademicSessionSetup.dtd">
 <sessionSetup term="{term}" year="{year}" campus="{campus}" incremental="true">
     <timePatterns>
     {tp_blocks}
@@ -312,6 +353,7 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
             staff_entries[code] = f'<employee externalId="{xml_escape(code)}" firstName="{xml_escape(first)}" lastName="{xml_escape(last)}"/>'
 
     staff_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE staff PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://www.unitime.org/interface/Staff.dtd">
 <staff term="{term}" year="{year}" campus="{campus}">
 {"".join(staff_entries.values())}
 </staff>"""
@@ -320,6 +362,7 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
     # Note: Using your existing build_curricula_xml logic but ensuring it's standalone
     curricula_content = build_curricula_xml(flat_records)
     curricula_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE curricula PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://www.unitime.org/interface/Curricula_3_2.dtd">
 {curricula_content}"""
 
     # 4. Build Offerings XML
@@ -343,8 +386,9 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
         if not subparts_dict:
             continue
 
-        # Build subparts
+        # Build subpart definitions and class records as siblings under config.
         subparts_xml = ""
+        classes_xml = ""
         for instr_type, classes in sorted(subparts_dict.items()):
             # Calculate minPerWeek from time pattern (e.g., "Auto 2 H 30 M" -> 150)
             min_per_week = 120  # default
@@ -353,28 +397,43 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
                 time_pattern_name = first_class.get("time_pattern_name", "")
                 min_per_week = parse_minutes_from_name(time_pattern_name)
 
-            # Build classes for this subpart
-            class_xml_list = ""
-            for r in classes:
-                class_xml_list += f'<class id="{xml_escape(r["class_code"])}" type="{xml_escape(instr_type)}" limit="{r["total_students"]}"><instructor id="{xml_escape(r["lecturer_code"])}" share="1.0" lead="true"/></class>'
+            subparts_xml += f'<subpart type="{xml_escape(instr_type)}" suffix="" minPerWeek="{min_per_week}"/>'
 
-            subparts_xml += f'<subpart type="{xml_escape(instr_type)}" minPerWeek="{min_per_week}">{class_xml_list}</subpart>'
+            for r in classes:
+                instructor_xml = ""
+                lecturer_code = str(r.get("lecturer_code") or "").strip()
+                if lecturer_code and lecturer_code.upper() != "TBA":
+                    instructor_xml = (
+                        f'<instructor id="{xml_escape(lecturer_code)}" '
+                        f'share="1.0" lead="true"/>'
+                    )
+                classes_xml += (
+                    f'<class id="{xml_escape(r["class_code"])}" '
+                    f'type="{xml_escape(instr_type)}" '
+                    f'suffix="{xml_escape(class_suffix(r))}" '
+                    f'limit="{r["total_students"]}">'
+                    f'{instructor_xml}'
+                    f'</class>'
+                )
 
         off_action = "update" if course_key in existing_courses else "insert"
         offering_id = course_number  # Use course_number as the ID
         offerings_body += f"""
-        <offering id="{xml_escape(offering_id)}" action="{off_action}">
-          <course subject="{xml_escape(subject_area)}" courseNbr="{xml_escape(course_number)}" controlling="true" title=""/>
+        <offering id="{xml_escape(offering_id)}" offered="true" action="{off_action}">
+          <course subject="{xml_escape(subject_area).upper()}" courseNbr="{xml_escape(course_number)}" controlling="true" title=""/>
           <config name="Default Config" limit="{total_limit}">
             {subparts_xml}
+            {classes_xml}
           </config>
         </offering>"""
 
-    offerings_xml = f"""<!DOCTYPE offerings PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://unitime.org">
-<?xml version="1.0" encoding="UTF-8"?>
+    offerings_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE offerings PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://www.unitime.org/interface/CourseOfferingExport.dtd">
 <offerings term="{term}" year="{year}" campus="{campus}" incremental="true">
 {offerings_body}
 </offerings>"""
+
+    validate_offerings_xml(offerings_xml)
 
     if not output_path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

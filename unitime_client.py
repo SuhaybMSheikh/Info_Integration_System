@@ -1,11 +1,11 @@
 import requests
-import subprocess
 from datetime import datetime
 from config import USERNAME, PASSWORD, DATA_EXCHANGE_ENDPOINT, UNITIME_BASE_URL, UNITIME_TOKEN
 import logging
 import json
 import os
 import time
+import zipfile
 
 logging.basicConfig(
     filename="integration.log",
@@ -85,6 +85,34 @@ def post_xml(xml_data: str):
         raise e
 
 
+def _post_xml_payload(xml_filename: str, xml_data: bytes):
+    response = requests.post(
+        DATA_EXCHANGE_ENDPOINT,
+        params={"token": UNITIME_TOKEN},
+        data=xml_data,
+        headers={"Content-Type": "application/xml;charset=UTF-8"},
+        timeout=120
+    )
+
+    return {
+        "filename": xml_filename,
+        "status": response.status_code,
+        "body": response.text,
+        "ok": response.status_code < 400,
+    }
+
+
+def _xml_payloads_from_file(snapshot_filename: str):
+    if snapshot_filename.lower().endswith(".zip"):
+        with zipfile.ZipFile(snapshot_filename) as unitime_zip:
+            for name in unitime_zip.namelist():
+                if name.lower().endswith(".xml"):
+                    yield name, unitime_zip.read(name)
+    else:
+        with open(snapshot_filename, "rb") as f:
+            yield os.path.basename(snapshot_filename), f.read()
+
+
 def post_xml_file(snapshot_filename: str):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = f"unitime_response_{timestamp}.log"
@@ -114,88 +142,64 @@ def post_xml_file(snapshot_filename: str):
     )
     # #endregion
 
-    status_marker = "__CURL_HTTP_STATUS__:"
-    curl_command = [
-        "curl",
-        "-k",
-        "--silent",
-        "--show-error",
-        # "-X", "POST",
-        # "-H", "Content-Type: application/zip",
-        # "--data-binary", f"@{snapshot_filename}",
-        "-F", f"file=@{snapshot_filename};type=application/zip",
-        "-w", f"\\n{status_marker}%{{http_code}}\\n",
-        f"{DATA_EXCHANGE_ENDPOINT}?token={UNITIME_TOKEN}"
-    ]
-
     try:
-        result = subprocess.run(
-            curl_command,
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
+        payloads = list(_xml_payloads_from_file(snapshot_filename))
+        if not payloads:
+            raise Exception("No XML files found to import.")
 
-        print(f"Exit code: {result.returncode}")
-        logging.info(f"curl exit code: {result.returncode}")
+        responses = []
+        failed_response = None
+        for xml_filename, xml_data in payloads:
+            print(f"\nImporting {xml_filename}...")
+            response_info = _post_xml_payload(xml_filename, xml_data)
+            responses.append(response_info)
 
-        # Extract HTTP status code appended by curl -w
-        http_status = None
-        body = result.stdout
-        if status_marker in result.stdout:
-            body, status_part = result.stdout.rsplit(status_marker, 1)
-            body = body.rstrip("\r\n")
-            status_str = status_part.strip().splitlines()[0] if status_part.strip() else ""
-            if status_str.isdigit():
-                http_status = int(status_str)
+            print(f"HTTP Status: {response_info['status']}")
+            print(response_info["body"])
+
+            if not response_info["ok"]:
+                logging.error(
+                    f"UniTime import failed for {xml_filename}: "
+                    f"{response_info['status']} {response_info['body']}"
+                )
+                failed_response = response_info
+                break
 
         # #region agent log
         _debug_log(
-            run_id="pre-fix",
+            run_id="raw-xml-post",
             hypothesis_id="H2",
             location="unitime_client.py:post_xml_file",
             message="UniTime response received",
             data={
-                "curl_exit_code": result.returncode,
-                "http_status": http_status,
-                "stdout_len": len(result.stdout or ""),
-                "stderr_len": len(result.stderr or ""),
-                "body_prefix": (body or "")[:200],
+                "files_imported": [r["filename"] for r in responses],
+                "statuses": [r["status"] for r in responses],
+                "body_prefixes": [(r["body"] or "")[:200] for r in responses],
             },
         )
         # #endregion
 
         # Save full response to log file
         with open(log_filename, "w", encoding="utf-8") as f:
-            f.write(f"CURL EXIT CODE: {result.returncode}\n\n")
-            if http_status is not None:
-                f.write(f"HTTP STATUS: {http_status}\n\n")
-            f.write("=== STDOUT ===\n")
-            f.write(body)
-            if result.stderr:
-                f.write("\n=== STDERR ===\n")
-                f.write(result.stderr)
+            for response_info in responses:
+                f.write(f"=== {response_info['filename']} ===\n")
+                f.write(f"HTTP STATUS: {response_info['status']}\n\n")
+                f.write(response_info["body"])
+                f.write("\n\n")
 
         print(f"Response saved to: {log_filename}")
-        print(body)
 
-        # Fail loudly if curl itself failed
-        if result.returncode != 0:
-            logging.error(f"curl failed: {result.stderr}")
-            raise Exception(f"curl command failed with exit code {result.returncode}:\n{result.stderr}")
-
-        # Print HTTP status errors; otherwise success
-        if http_status is not None and http_status >= 400:
-            error_msg = f"HTTP Status Error: {http_status}\n{body}"
-            print(error_msg)
-            logging.error(error_msg)
-            raise Exception("UniTime returned error response.")
+        if failed_response:
+            raise Exception(
+                f"UniTime returned error response while importing {failed_response['filename']}."
+            )
 
         print("Import successful")
         logging.info("Import successful")
 
-    except subprocess.TimeoutExpired:
-        raise Exception("curl command timed out after 120 seconds")
+    except requests.exceptions.RequestException as e:
+        print("\n Connection Error")
+        raise e
 
 # def get_sessions():
 #     url = f"{DATA_EXCHANGE_ENDPOINT}/sessions"
