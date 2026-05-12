@@ -10,8 +10,26 @@ import xml.etree.ElementTree as ET
 TIME_PREFERENCE_DAYS = "MTWRF"
 TIME_PREFERENCE_START_TIME = "0830"
 TIME_PREFERENCE_END_TIME = "1800"
-CLASS_START_DATE = "01/01"
+CLASS_START_DATE = "1/1"
 CLASS_END_DATE = "12/31"
+RESERVATION_CONFIG_ID = "Default Config"
+RESERVATION_CLASSIFICATION = "G1"
+INTAKE_PREFIX_TO_AREA = {
+    "APD1F": "Deg",
+    "APD2F": "Deg",
+    "APD3F": "Deg",
+    "APD4F": "Deg",
+    "APU1F": "Deg",
+    "APU2F": "Deg",
+    "APU3F": "Deg",
+    "APU4F": "Deg",
+    "UCDF": "Dip",
+    "UCD2F": "Dip",
+    "UCFF": "Fou",
+    "APUMF": "Mas",
+    "APDMF": "Mas",
+    "AFCF": "Cert",
+}
 
 def xml_escape(s: str) -> str:
     if s is None:
@@ -23,6 +41,13 @@ def xml_escape(s: str) -> str:
          .replace('"', "&quot;")
          .replace("'", "&apos;")
     )
+
+def get_academic_area(intake_code: str) -> str:
+    code = str(intake_code or "").strip().upper()
+    for prefix in sorted(INTAKE_PREFIX_TO_AREA.keys(), key=len, reverse=True):
+        if code.startswith(prefix):
+            return INTAKE_PREFIX_TO_AREA[prefix]
+    raise ValueError(f"Unknown intake prefix for code: {intake_code}")
 
 
 def format_date(d: str) -> str:
@@ -212,49 +237,41 @@ def validate_offerings_xml(xml_text: str):
             if "datePattern" in cls.attrib:
                 raise ValueError(f"Class {cls.get('id')} uses obsolete datePattern attribute.")
 
-            date_pref = cls.find("date")
-            if date_pref is None:
-                raise ValueError(f"Class {cls.get('id')} is missing required date element.")
-            if date_pref.get("startDate") != CLASS_START_DATE:
-                raise ValueError(f"Class {cls.get('id')} has invalid date startDate.")
-            if date_pref.get("endDate") != CLASS_END_DATE:
-                raise ValueError(f"Class {cls.get('id')} has invalid date endDate.")
-
-            time_pref = cls.find("time")
-            if time_pref is None:
-                raise ValueError(f"Class {cls.get('id')} is missing required time preference.")
-            if "start" in time_pref.attrib or "pattern" in time_pref.attrib:
-                raise ValueError(f"Class {cls.get('id')} uses obsolete bitmask time attributes.")
-            if time_pref.get("days") != TIME_PREFERENCE_DAYS:
-                raise ValueError(f"Class {cls.get('id')} has invalid time preference days.")
-            if time_pref.get("startTime") != TIME_PREFERENCE_START_TIME:
-                raise ValueError(f"Class {cls.get('id')} has invalid time preference startTime.")
-            if time_pref.get("endTime") != TIME_PREFERENCE_END_TIME:
-                raise ValueError(f"Class {cls.get('id')} has invalid time preference endTime.")
-            if time_pref.get("preference") != "1":
-                raise ValueError(f"Class {cls.get('id')} has invalid time preference value.")
-
-        for subpart in offering.findall(".//subpart"):
-            if subpart.findall("class"):
-                raise ValueError(
-                    f"Offering {offering.get('id')} has class elements nested inside subpart elements."
-                )
-
-def build_time_pattern_xml(name, start_times_hhmm, nbr_meetings=1, mins_per_meeting=None):
+def build_time_pattern_xml(name, start_times_hhmm=None, nbr_meetings=1, mins_per_meeting=None):
     day_codes = ["M", "T", "W", "Th", "F"]
     days_xml = "".join([f'<days code="{d}"/>' for d in day_codes])
 
-    if mins_per_meeting is None:
-        mins_per_meeting = parse_minutes_from_name(name)
+    # Always dynamically parse durations from the name attribute
+    mins_per_meeting = parse_minutes_from_name(name)
+
+    # Ensure nbrSlotsPerMeeting is calculated as total_minutes / 5
+    nbr_slots_per_meeting = int(mins_per_meeting // 5)
+
+    # Dynamically calculate start times based on 15-minute sliding interval
+    calculated_start_times = []
+    current_time = 8 * 60  # 08:00 in minutes
+    max_start = 18 * 60 - mins_per_meeting  # 18:00 minus duration
+    
+    while current_time <= max_start:
+        if 9 * 60 + 1 <= current_time <= 9 * 60 + 59:
+            current_time = 10 * 60  # Skip to 10:00
+            continue
+            
+        hours = current_time // 60
+        mins = current_time % 60
+        calculated_start_times.append(f"{hours:02d}{mins:02d}")
+        
+        current_time += 15
 
     """Returns a single time pattern block."""
     times_xml = "".join(
-        f'<time start="{t}"/>' for t in start_times_hhmm
+        f'<time start="{t}"/>' for t in calculated_start_times
     )
     return f"""
     <timePattern name="{xml_escape(name)}" 
                  nbrMeetings="{nbr_meetings}" 
                  minsPerMeeting="{mins_per_meeting}" 
+                 nbrSlotsPerMeeting="{nbr_slots_per_meeting}"
                  type="Standard" 
                  visible="true">
       {days_xml}
@@ -400,6 +417,32 @@ def build_session_xml():
     <!-- Leave empty or add a comment -->
 </academicSessionSetup>
 """
+
+def map_min_per_week_to_pattern_name(min_per_week: int) -> str:
+    """
+    Maps minPerWeek value (in minutes) to UniTime Time Pattern name.
+
+    Mapping:
+    - 60 → "Auto 1 H"
+    - 75 → "Auto 1 H 15 M"
+    - 90 → "Auto 1 H 30 M"
+    - 105 → "Auto 1 H 45 M"
+    - 120 → "Auto 2 H"
+    - 135 → "Auto 2 H 15 M"
+    - 150 → "Auto 2 H 30 M"
+    - 180 → "Auto 3 H"
+    """
+    mapping = {
+        60: "Auto 1 H",
+        75: "Auto 1 H 15 M",
+        90: "Auto 1 H 30 M",
+        105: "Auto 1 H 45 M",
+        120: "Auto 2 H",
+        135: "Auto 2 H 15 M",
+        150: "Auto 2 H 30 M",
+        180: "Auto 3 H"
+    }
+    return mapping.get(min_per_week, "Auto 2 H")
 
 def map_academic_area_abbreviation(intake_code: str) -> str:
     """
@@ -630,55 +673,95 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
 
             # Group classes by UniTime instructional type abbreviation.
             subparts_dict = defaultdict(list)
-            total_limit = 0
             for r in valid_classes:
                 instr_type = instructional_type_from_class_code(r.get("class_code"))
                 subparts_dict[instr_type].append(r)
+
+            lecture_classes = subparts_dict.get("Lec", [])
+            tutorial_classes = subparts_dict.get("T", [])
+
+            # Calculate total limit based on controlling classes (Lectures) to avoid double counting
+            total_limit = 0
+            for r in lecture_classes:
                 try:
                     total_limit += int(r.get("total_students", 0))
                 except Exception:
                     pass
-
-            if not subparts_dict:
-                continue
-
-            # Build subpart definitions and class records as siblings under config.
+            
+            if total_limit == 0 and tutorial_classes:
+                for r in tutorial_classes:
+                    try:
+                        total_limit += int(r.get("total_students", 0))
+                    except Exception:
+                        pass
+            
+            # Calculate minPerWeek for each type
+            lec_min_per_week = 120
+            if lecture_classes:
+                time_pattern_name = lecture_classes[0].get("time_pattern_name", "")
+                lec_min_per_week = parse_minutes_from_name(time_pattern_name)
+            
+            tut_min_per_week = 120
+            if tutorial_classes:
+                time_pattern_name = tutorial_classes[0].get("time_pattern_name", "")
+                tut_min_per_week = parse_minutes_from_name(time_pattern_name)
+            
+            # Build subparts tree
             subparts_xml = ""
+            if lecture_classes:
+                lec_time_pattern_name = map_min_per_week_to_pattern_name(lec_min_per_week)
+                subparts_xml += f'<subpart type="Lec" timePattern="{lec_time_pattern_name}" minPerWeek="{lec_min_per_week}" />\n'
+            if tutorial_classes:
+                tut_time_pattern_name = map_min_per_week_to_pattern_name(tut_min_per_week)
+                subparts_xml += f'<subpart type="T" timePattern="{tut_time_pattern_name}" minPerWeek="{tut_min_per_week}"/>\n'
+
+            # Build classes tree
             classes_xml = ""
-            for instr_type, classes in sorted(subparts_dict.items()):
-                # Calculate minPerWeek from time pattern (e.g., "Auto 2 H 30 M" -> 150)
-                min_per_week = 120  # default
-                if classes:
-                    first_class = classes[0]
-                    time_pattern_name = first_class.get("time_pattern_name", "")
-                    min_per_week = parse_minutes_from_name(time_pattern_name)
-
-                subparts_xml += f'<subpart type="{xml_escape(instr_type)}" suffix="" minPerWeek="{min_per_week}"/>'
-
-                for r in classes:
+            if lecture_classes:
+                for r in lecture_classes:
                     instructor_xml = ""
                     class_id = shortened_class_id(r["class_code"])
-                    date_xml = class_date_xml()
-                    time_xml = time_preference_xml()
                     lecturer_code = str(r.get("lecturer_code") or "").strip()
                     if lecturer_code and lecturer_code.upper() != "TBA":
-                        instructor_xml = (
-                            f'<instructor id="{xml_escape(lecturer_code)}" '
-                            f'share="1.0" lead="true"/>'
-                        )
-                    classes_xml += (
-                        f'<class id="{xml_escape(class_id)}" '
-                        f'type="{xml_escape(instr_type)}" '
-                        f'suffix="{xml_escape(class_suffix(r))}" '
-                        # f'limit="{r["total_students"]}">'
-                        f'limit="{total_limit}">'
-                        f'{date_xml}'
-                        f'{instructor_xml}'
-                        f'{time_xml}'
-                        f'</class>'
-                    )
+                        instructor_xml = f'<instructor id="{xml_escape(lecturer_code)}" share="100" lead="true"/>'
+                    suffix = class_suffix(r)
+                    
+                    lec_limit = 0
+                    try:
+                        lec_limit = int(r.get("total_students", 0))
+                    except Exception:
+                        pass
+                    if lec_limit == 0:
+                        lec_limit = total_limit if total_limit > 0 else 30
+                    
+                    classes_xml += f'  <class id="{xml_escape(class_id)}" type="Lec" suffix="{xml_escape(suffix)}" limit="{lec_limit}">\n'
+                    if instructor_xml:
+                        classes_xml += f'    {instructor_xml}\n'
+                    classes_xml += '  </class>\n'
+                    
+            if tutorial_classes:
+                for r in tutorial_classes:
+                    tut_instructor_xml = ""
+                    tut_class_id = shortened_class_id(r["class_code"])
+                    tut_lecturer_code = str(r.get("lecturer_code") or "").strip()
+                    if tut_lecturer_code and tut_lecturer_code.upper() != "TBA":
+                        tut_instructor_xml = f'<instructor id="{xml_escape(tut_lecturer_code)}" share="100" lead="true"/>'
+                    suffix = class_suffix(r)
+                    
+                    tut_limit = 0
+                    try:
+                        tut_limit = int(r.get("total_students", 0))
+                    except Exception:
+                        pass
+                    if tut_limit == 0:
+                        tut_limit = total_limit if total_limit > 0 else 30
+                    
+                    classes_xml += f'  <class id="{xml_escape(tut_class_id)}" type="T" suffix="{xml_escape(suffix)}" limit="{tut_limit}">\n'
+                    if tut_instructor_xml:
+                        classes_xml += f'    {tut_instructor_xml}\n'
+                    classes_xml += '  </class>\n'
 
-            off_action = "update" if course_key in existing_courses else "insert"
+            off_action = "insert"
             offering_id = course_number  # Use course_number as the ID
             offerings_body += f"""
         <offering id="{xml_escape(offering_id)}" offered="true" action="{off_action}">
