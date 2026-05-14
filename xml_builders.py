@@ -585,6 +585,74 @@ def build_curricula_xml(records):
 
     return f'<curricula campus="{xml_escape(campus)}" term="{xml_escape(term)}" year="{xml_escape(year)}">' + ''.join(xml_blocks) + '</curricula>'
 
+def build_reservations_xml(flat_records):
+    year, term = EXPECTED_ACADEMIC_SESSION.split()
+    campus = year
+    valid_subject_areas = load_valid_subject_areas()
+    courses = {}
+
+    for r in flat_records:
+        course_number = r.get("course_number")
+        if not course_number:
+            continue
+
+        # Parse subject_area from class_code to match offerings logic
+        parsed_subject_area = subject_area_from_class_code(r.get("class_code"))
+        if not parsed_subject_area:
+            continue
+
+        canonical_subject_area = valid_subject_areas.get(parsed_subject_area.upper())
+        if not canonical_subject_area:
+            continue
+
+        key = (canonical_subject_area, course_number)
+        course = courses.setdefault(
+            key,
+            {
+                "subject_area": canonical_subject_area,
+                "course_number": course_number,
+                "intakes": set(),
+                "total_limit": 0,
+            }
+        )
+
+        # Calculate total limit based on lecture classes only (matching offerings logic)
+        instr_type = instructional_type_from_class_code(r.get("class_code"))
+        if instr_type == "Lec":  # Only count lecture classes for total limit
+            try:
+                course["total_limit"] += int(r.get("total_students", 0))
+            except Exception:
+                pass
+
+        # Collect unique intakes for this course
+        for intake in r.get("intakes") or []:
+            intake_code = str(intake.get("code") or "").strip()
+            if intake_code:
+                course["intakes"].add(intake_code)
+
+    reservation_blocks = []
+    for subject_area, course_number in sorted(courses):
+        course = courses[(subject_area, course_number)]
+        total_limit = course["total_limit"] if course["total_limit"] > 0 else 30
+
+        for intake_code in sorted(course["intakes"]):
+            academic_area = get_academic_area(intake_code)
+            reservation_blocks.append(
+                f'<reservation type="curriculum" subject="{xml_escape(subject_area)}" '
+                f'courseNbr="{xml_escape(course_number)}" limit="{total_limit}">'
+                f'<configuration name="Default Config"/>'
+                f'<academicArea abbreviation="{xml_escape(academic_area)}"/>'
+                f'<academicClassification code="{xml_escape(RESERVATION_CLASSIFICATION)}"/>'
+                f'<major code="{xml_escape(intake_code)}"/>'
+                f'</reservation>'
+            )
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE reservations PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://www.unitime.org/interface/Reservations.dtd">
+<reservations campus="{xml_escape(campus)}" term="{xml_escape(term)}" year="{xml_escape(year)}" incremental="true">
+{''.join(reservation_blocks)}
+</reservations>"""
+
 def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existing_courses, existing_classes, output_path=None):
     year, term = EXPECTED_ACADEMIC_SESSION.split()
     campus = year
@@ -780,6 +848,8 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
 
     validate_offerings_xml(offerings_xml)
 
+    reservations_xml = build_reservations_xml(flat_records)
+
     if not output_path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = f"xml_snapshot_{timestamp}.zip"
@@ -791,6 +861,7 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
         staff_xml,
         curricula_xml,
         offerings_xml,
+        reservations_xml,
     )
 
     return {
@@ -801,21 +872,23 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
             "staff": staff_xml,
             "curricula": curricula_xml,
             "offerings": offerings_xml,
+            "reservations": reservations_xml,
         },
     }
 
-def create_unitime_zip_package(output_zip_path, session_xml, time_patterns_xml, staff_xml, curricula_xml, offerings_xml):
+def create_unitime_zip_package(output_zip_path, session_xml, time_patterns_xml, staff_xml, curricula_xml, offerings_xml, reservations_xml):
     """
     Creates a zip archive containing the four required UniTime XML files.
     """
     try:
         with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as unitime_zip:
             # Writing each individual XML string into its own file inside the zip
-            unitime_zip.writestr("01_session.xml", session_xml)
+            unitime_zip.writestr("01_sessions.xml", session_xml)
             unitime_zip.writestr("02_time_patterns.xml", time_patterns_xml)
-            unitime_zip.writestr("03_staff.xml", staff_xml)
+            unitime_zip.writestr("03_instructors.xml", staff_xml)
             unitime_zip.writestr("04_offerings.xml", offerings_xml)
             unitime_zip.writestr("05_curricula.xml", curricula_xml)
+            unitime_zip.writestr("06_reservations.xml", reservations_xml)
 
             
         print(f"Successfully created: {output_zip_path}")
