@@ -14,6 +14,30 @@ CLASS_START_DATE = "1/1"
 CLASS_END_DATE = "12/31"
 RESERVATION_CONFIG_ID = "Default Config"
 RESERVATION_CLASSIFICATION = "G1"
+INTAKE_SESSION_TO_CONFIG_DATE = {
+    "2505": "25-06-16",
+    "2508": "25-09-29",
+    "2509": "25-09-29",
+    "2512": "26-01-26",
+    "2601": "26-01-26",
+    "2603": "26-03-09",
+    "2604": "26-04-27",
+    "2605": "26-05-18",
+    "2606": "26-06-15",
+    "2607": "26-07-06",
+    "2608": "26-08-17",
+    "2609": "26-09-07",
+    "2610": "26-10-12",
+    "2611": "26-11-09",
+    "2612": "26-12-07",
+}
+OFFERINGS_DOCTYPE = '<!DOCTYPE offerings PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://www.unitime.org/interface/CourseOfferingExport.dtd">'
+CLASS_DATE_FROM_ID_RE = re.compile(r"_(\d{2}-\d{2}-\d{2})$")
+CLASS_TYPE_SORT_ORDER = {
+    "Lec": 0,
+    "T": 1,
+    "Lab": 2,
+}
 INTAKE_PREFIX_TO_AREA = {
     "APD1F": "Deg",
     "APD2F": "Deg",
@@ -48,6 +72,43 @@ def get_academic_area(intake_code: str) -> str:
         if code.startswith(prefix):
             return INTAKE_PREFIX_TO_AREA[prefix]
     raise ValueError(f"Unknown intake prefix for code: {intake_code}")
+
+def intake_session_code(intake_code: str) -> str:
+    code = str(intake_code or "").strip().upper()
+    for prefix in sorted(INTAKE_PREFIX_TO_AREA.keys(), key=len, reverse=True):
+        if code.startswith(prefix):
+            remainder = code[len(prefix):]
+            match = re.match(r"(\d{4})", remainder)
+            if match:
+                return match.group(1)
+            break
+
+    match = re.search(r"(\d{4})", code)
+    if match:
+        return match.group(1)
+
+    raise ValueError(f"Unable to extract intake session code from major: {intake_code}")
+
+def reservation_config_name(intake_code: str, available_config_dates: set[str] | None = None) -> str:
+    session_code = intake_session_code(intake_code)
+    yy_mm = f"{session_code[:2]}-{session_code[2:]}"
+
+    if available_config_dates:
+        matching_dates = sorted(
+            date for date in available_config_dates
+            if date.startswith(f"{yy_mm}-")
+        )
+        if matching_dates:
+            return f"Config {matching_dates[0]}"
+
+    config_date = INTAKE_SESSION_TO_CONFIG_DATE.get(session_code)
+    if not config_date:
+        raise ValueError(
+            f"No configuration date mapping found for intake session {session_code} "
+            f"from major {intake_code}"
+        )
+
+    return f"Config {config_date}"
 
 
 def format_date(d: str) -> str:
@@ -219,6 +280,167 @@ def log_class_without_subject_area(group: dict, record: dict, reason: str, parse
         f.write("\n=== CLASS ===\n")
         for k, v in record.items():
             f.write(f"{k}: {v}\n")
+
+def clone_xml_element(element: ET.Element) -> ET.Element:
+    return ET.fromstring(ET.tostring(element, encoding="unicode"))
+
+def class_date_from_id(class_id: str) -> str:
+    match = CLASS_DATE_FROM_ID_RE.search(str(class_id or ""))
+    if not match:
+        raise ValueError(f"Class id does not end with a YY-MM-DD date stamp: {class_id}")
+    return match.group(1)
+
+def class_sort_key(cls: ET.Element):
+    class_type = cls.get("type", "")
+    suffix = cls.get("suffix", "")
+    suffix_match = re.search(r"\d+", suffix)
+    suffix_number = int(suffix_match.group(0)) if suffix_match else 0
+    return (
+        CLASS_TYPE_SORT_ORDER.get(class_type, 99),
+        suffix_number,
+        suffix,
+        cls.get("id", ""),
+    )
+
+def config_limit_from_classes(classes: list[ET.Element]) -> int:
+    limits = []
+    for cls in classes:
+        try:
+            limits.append(int(cls.get("limit", "0") or 0))
+        except Exception:
+            limits.append(0)
+    return max(limits) if limits else 0
+
+def split_offering_configs_by_class_date(offerings_xml: str) -> str:
+    root = ET.fromstring(offerings_xml)
+
+    for offering in root.findall("offering"):
+        original_configs = list(offering.findall("config"))
+        if not original_configs:
+            continue
+
+        subparts = []
+        classes_by_date = defaultdict(list)
+
+        for config in original_configs:
+            subparts.extend(list(config.findall("subpart")))
+            for cls in config.findall("class"):
+                class_date = class_date_from_id(cls.get("id"))
+                classes_by_date[class_date].append(cls)
+
+        if not classes_by_date:
+            continue
+
+        for config in original_configs:
+            offering.remove(config)
+
+        for class_date in sorted(classes_by_date):
+            classes = sorted(classes_by_date[class_date], key=class_sort_key)
+            new_config = ET.Element(
+                "config",
+                {
+                    "name": f"Config {class_date}",
+                    "limit": str(config_limit_from_classes(classes)),
+                }
+            )
+
+            for subpart in subparts:
+                new_config.append(clone_xml_element(subpart))
+            for cls in classes:
+                new_config.append(clone_xml_element(cls))
+
+            offering.append(new_config)
+
+    ET.indent(root, space="  ")
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'{OFFERINGS_DOCTYPE}\n'
+        f'{ET.tostring(root, encoding="unicode")}'
+    )
+
+def update_reservation_configurations(
+    reservations_xml: str,
+    course_config_dates: dict[tuple[str, str], set[str]] | None = None,
+    course_config_limits: dict[tuple[str, str, str], int] | None = None
+) -> str:
+    root = ET.fromstring(reservations_xml)
+
+    for reservation in root.findall("reservation"):
+        major = reservation.find("major")
+        if major is None or not major.get("code"):
+            raise ValueError("Reservation is missing required major code.")
+
+        subject = reservation.get("subject")
+        course_nbr = reservation.get("courseNbr")
+        available_dates = None
+        if course_config_dates and subject and course_nbr:
+            available_dates = course_config_dates.get((subject, course_nbr))
+
+        config_name = reservation_config_name(major.get("code"), available_dates)
+        configuration = reservation.find("configuration")
+        if configuration is None:
+            configuration = ET.Element("configuration")
+            reservation.insert(0, configuration)
+        configuration.set("name", config_name)
+
+        if course_config_limits and subject and course_nbr:
+            config_limit = course_config_limits.get((subject, course_nbr, config_name))
+            if config_limit is not None:
+                reservation.set("limit", str(config_limit))
+
+    ET.indent(root, space="  ")
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE reservations PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://www.unitime.org/interface/Reservations.dtd">\n'
+        f'{ET.tostring(root, encoding="unicode")}'
+    )
+
+def course_config_dates_from_offerings(offerings_xml: str) -> dict[tuple[str, str], set[str]]:
+    root = ET.fromstring(offerings_xml)
+    config_dates = defaultdict(set)
+
+    for offering in root.findall("offering"):
+        course = offering.find("course")
+        if course is None:
+            continue
+
+        subject = course.get("subject")
+        course_nbr = course.get("courseNbr")
+        if not subject or not course_nbr:
+            continue
+
+        for config in offering.findall("config"):
+            name = config.get("name", "")
+            match = re.match(r"Config\s+(\d{2}-\d{2}-\d{2})$", name)
+            if match:
+                config_dates[(subject, course_nbr)].add(match.group(1))
+
+    return dict(config_dates)
+
+def course_config_limits_from_offerings(offerings_xml: str) -> dict[tuple[str, str, str], int]:
+    root = ET.fromstring(offerings_xml)
+    config_limits = {}
+
+    for offering in root.findall("offering"):
+        course = offering.find("course")
+        if course is None:
+            continue
+
+        subject = course.get("subject")
+        course_nbr = course.get("courseNbr")
+        if not subject or not course_nbr:
+            continue
+
+        for config in offering.findall("config"):
+            config_name = config.get("name")
+            if not config_name:
+                continue
+            try:
+                config_limits[(subject, course_nbr, config_name)] = int(config.get("limit", "0") or 0)
+            except Exception:
+                config_limits[(subject, course_nbr, config_name)] = 0
+
+    return config_limits
 
 def validate_offerings_xml(xml_text: str):
     root = ET.fromstring(xml_text)
@@ -585,7 +807,7 @@ def build_curricula_xml(records):
 
     return f'<curricula campus="{xml_escape(campus)}" term="{xml_escape(term)}" year="{xml_escape(year)}">' + ''.join(xml_blocks) + '</curricula>'
 
-def build_reservations_xml(flat_records):
+def build_reservations_xml(flat_records, course_config_dates=None):
     year, term = EXPECTED_ACADEMIC_SESSION.split()
     campus = year
     valid_subject_areas = load_valid_subject_areas()
@@ -611,7 +833,7 @@ def build_reservations_xml(flat_records):
             {
                 "subject_area": canonical_subject_area,
                 "course_number": course_number,
-                "intakes": set(),
+                "intakes": {},
                 "total_limit": 0,
             }
         )
@@ -628,19 +850,29 @@ def build_reservations_xml(flat_records):
         for intake in r.get("intakes") or []:
             intake_code = str(intake.get("code") or "").strip()
             if intake_code:
-                course["intakes"].add(intake_code)
+                try:
+                    students = int(intake.get("students", 0) or 0)
+                except Exception:
+                    students = 0
+                previous_students = course["intakes"].get(intake_code)
+                if previous_students is None or students > previous_students:
+                    course["intakes"][intake_code] = students
 
     reservation_blocks = []
     for subject_area, course_number in sorted(courses):
         course = courses[(subject_area, course_number)]
-        total_limit = course["total_limit"] if course["total_limit"] > 0 else 30
 
-        for intake_code in sorted(course["intakes"]):
+        available_dates = None
+        if course_config_dates:
+            available_dates = course_config_dates.get((subject_area, course_number))
+
+        for intake_code, students in sorted(course["intakes"].items()):
             academic_area = get_academic_area(intake_code)
+            config_name = reservation_config_name(intake_code, available_dates)
             reservation_blocks.append(
                 f'<reservation type="curriculum" subject="{xml_escape(subject_area)}" '
-                f'courseNbr="{xml_escape(course_number)}" limit="{total_limit}">'
-                f'<configuration name="Default Config"/>'
+                f'courseNbr="{xml_escape(course_number)}" limit="{students}">'
+                f'<configuration name="{xml_escape(config_name)}"/>'
                 f'<academicArea abbreviation="{xml_escape(academic_area)}"/>'
                 f'<academicClassification code="{xml_escape(RESERVATION_CLASSIFICATION)}"/>'
                 f'<major code="{xml_escape(intake_code)}"/>'
@@ -841,14 +1073,17 @@ def build_data_exchange_zip(grouped_records, flat_records, time_patterns, existi
         </offering>"""
 
     offerings_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE offerings PUBLIC "-//UniTime//DTD University Course Timetabling/EN" "http://www.unitime.org/interface/CourseOfferingExport.dtd">
+{OFFERINGS_DOCTYPE}
 <offerings term="{term}" year="{year}" campus="{campus}" incremental="true">
 {offerings_body}
 </offerings>"""
 
+    offerings_xml = split_offering_configs_by_class_date(offerings_xml)
     validate_offerings_xml(offerings_xml)
 
-    reservations_xml = build_reservations_xml(flat_records)
+    course_config_dates = course_config_dates_from_offerings(offerings_xml)
+    reservations_xml = build_reservations_xml(flat_records, course_config_dates)
+    reservations_xml = update_reservation_configurations(reservations_xml, course_config_dates)
 
     if not output_path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
